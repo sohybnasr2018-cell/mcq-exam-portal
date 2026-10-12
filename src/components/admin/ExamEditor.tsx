@@ -12,6 +12,7 @@ export default function ExamEditor() {
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
   const [duration, setDuration] = useState(60);
+  const [showResults, setShowResults] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function ExamEditor() {
       setTitle(data.title);
       setInstructions(data.instructions || '');
       setDuration(data.duration_minutes);
+      setShowResults(data.show_results ?? false);
     }
   };
 
@@ -36,7 +38,8 @@ export default function ExamEditor() {
     const examData = {
       title,
       instructions,
-      duration_minutes: duration
+      duration_minutes: duration,
+      show_results: showResults
     };
 
     let examId = id;
@@ -102,6 +105,23 @@ export default function ExamEditor() {
             value={duration}
             onChange={(e) => setDuration(parseInt(e.target.value))}
           />
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+              checked={showResults}
+              onChange={(e) => setShowResults(e.target.checked)}
+            />
+            <span className="text-sm font-semibold text-gray-800">
+              إظهار النتيجة والدرجة للطالب فور تسليم الامتحان (Show score to student after submission)
+            </span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1 mr-8 ml-8">
+            عند التفعيل، سيرى الطالب درجته النهائية والنسبة المئوية فور انتهاء الامتحان. إذا تم التعطيل، ستظهر رسالة تم التسليم فقط.
+          </p>
         </div>
 
         <div className="flex justify-end">

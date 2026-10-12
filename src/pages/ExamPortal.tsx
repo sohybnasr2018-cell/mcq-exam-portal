@@ -161,8 +161,18 @@ export default function ExamPortal() {
       
       if (error) throw error;
       if (data.success) {
-        setAttempt({ ...attempt, status: data.status || 'submitted' });
-        localStorage.removeItem(`attempt_${examId}`);
+        // Fetch the updated attempt record containing score and statistics
+        const { data: updatedAttempt } = await supabase
+          .from('attempts')
+          .select('*')
+          .eq('id', attempt.id)
+          .single();
+
+        if (updatedAttempt) {
+          setAttempt(updatedAttempt);
+        } else {
+          setAttempt({ ...attempt, status: data.status || 'submitted' });
+        }
       }
     } catch (err) {
       console.error(err);
@@ -179,7 +189,7 @@ export default function ExamPortal() {
   if (loading && !attempt) return <div className="p-8 text-center" dir={lang === 'ar' ? 'rtl' : 'ltr'}>Loading...</div>;
   if (error) return <div className="p-8 text-center text-red-600 font-bold" dir={lang === 'ar' ? 'rtl' : 'ltr'}>{error}</div>;
 
-  if (!attempt || attempt.status === 'expired') {
+  if (!attempt) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
         <div className="absolute top-4 right-4">
@@ -214,12 +224,64 @@ export default function ExamPortal() {
   }
 
   if (attempt.status !== 'in_progress') {
+    const hasScore = attempt.score !== null && attempt.score !== undefined;
+    const percentage = hasScore && attempt.max_score > 0
+      ? Math.round((attempt.score / attempt.max_score) * 100)
+      : null;
+
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-        <div className="bg-white p-8 rounded-lg shadow-md max-w-md text-center">
-          <CheckCircle className="mx-auto text-green-500 mb-4" size={48} />
-          <h2 className="text-2xl font-bold mb-2">{lang === 'ar' ? 'تم تسليم الامتحان' : 'Exam Submitted'}</h2>
-          <p className="text-gray-600">{lang === 'ar' ? 'تم حفظ إجاباتك بنجاح.' : 'Your exam has been successfully recorded.'}</p>
+        <div className="absolute top-4 right-4">
+           <button onClick={() => setLang(lang === 'en' ? 'ar' : 'en')} className="px-3 py-1 bg-white shadow rounded-md text-sm font-medium">
+             {lang === 'en' ? 'عربي' : 'English'}
+           </button>
+        </div>
+        <div className="bg-white p-8 rounded-2xl shadow-lg max-w-md w-full text-center border border-gray-100">
+          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle size={36} className="" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            {lang === 'ar' ? 'تم تسليم الامتحان بنجاح' : 'Exam Submitted Successfully'}
+          </h2>
+          <p className="text-gray-500 mb-6 text-sm">
+            {lang === 'ar' ? 'تم حفظ وتوثيق إجاباتك على الخادم.' : 'Your answers have been securely recorded on the server.'}
+          </p>
+
+          {exam?.show_results && hasScore ? (
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-6 mb-6">
+              <p className="text-sm font-medium text-blue-700 mb-1">
+                {lang === 'ar' ? 'درجتك النهائية' : 'Your Final Score'}
+              </p>
+              <div className="text-4xl font-extrabold text-blue-900 my-2">
+                {attempt.score} <span className="text-xl text-blue-600 font-semibold">/ {attempt.max_score}</span>
+              </div>
+              {percentage !== null && (
+                <div className="mt-3 inline-block px-3 py-1 bg-blue-600 text-white text-sm font-bold rounded-full">
+                  {percentage}%
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-blue-200/60 text-xs text-gray-600">
+                <div>
+                  <span className="block font-semibold text-gray-700 text-sm">{attempt.answered_questions ?? '-'}</span>
+                  <span>{lang === 'ar' ? 'أسئلة تمت الإجابة عليها' : 'Answered'}</span>
+                </div>
+                <div>
+                  <span className="block font-semibold text-gray-700 text-sm">{attempt.unanswered_questions ?? '-'}</span>
+                  <span>{lang === 'ar' ? 'أسئلة بدون إجابة' : 'Unanswered'}</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 text-sm text-gray-600">
+              {lang === 'ar'
+                ? 'سيتم مراجعة النتائج واعتمادها من قِبل إدارة الامتحان.'
+                : 'Results will be reviewed and announced by the administration.'}
+            </div>
+          )}
+
+          <div className="text-xs text-gray-400">
+            {lang === 'ar' ? `امتحان: ${exam?.title}` : `Exam: ${exam?.title}`}
+          </div>
         </div>
       </div>
     );
