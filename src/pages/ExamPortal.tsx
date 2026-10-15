@@ -386,11 +386,13 @@ export default function ExamPortal() {
         {currentQuestion && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex-1">
             {/* Question header */}
-            <div className="flex items-start gap-3 mb-6">
-              <span className="shrink-0 w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+            <div className="flex items-start gap-3.5 mb-6">
+              <span className="shrink-0 w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm mt-1">
                 {currentIndex + 1}
               </span>
-              <h2 className="text-gray-800 font-semibold text-lg leading-relaxed pt-1">{currentQuestion.text}</h2>
+              <div className="flex-1 p-4 bg-slate-50/80 border border-slate-200 rounded-xl shadow-xs">
+                <h2 className="text-gray-900 font-semibold text-lg leading-relaxed">{currentQuestion.text}</h2>
+              </div>
             </div>
 
             {/* Options */}
