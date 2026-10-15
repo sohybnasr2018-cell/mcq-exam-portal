@@ -57,7 +57,7 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
   const addQuestion = async () => {
     const { data: newQ, error } = await supabase.from('questions').insert({
       exam_id: examId,
-      text: 'New Question',
+      text: '',
       marks: 1,
       order_num: questions.length
     }).select().single();
@@ -81,7 +81,7 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
 
     const { data: newOpt, error } = await supabase.from('options').insert({
       question_id: qId,
-      text: 'New Option',
+      text: '',
       order_num: questions[qIndex].options.length
     }).select().single();
 
@@ -157,27 +157,29 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
           <textarea
             value={q.text}
             onChange={(e) => updateQuestionText(q.id, e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded mb-4"
+            placeholder="Type your question here..."
+            className="w-full p-2.5 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800"
             rows={2}
           />
           
           <div className="space-y-2 pl-4">
-            {q.options.map((opt) => (
+            {q.options.map((opt, optIndex) => (
               <div key={opt.id} className="flex items-center space-x-2">
                 <button
                   onClick={() => setCorrectOption(q.id, opt.id)}
-                  className={`p-1 rounded-full ${opt.is_correct ? 'text-green-600 bg-green-100' : 'text-gray-400 bg-gray-100'}`}
-                  title="Mark as correct"
+                  className={`p-1.5 rounded-full transition ${opt.is_correct ? 'text-green-600 bg-green-100 ring-2 ring-green-500' : 'text-gray-400 bg-gray-100 hover:bg-gray-200'}`}
+                  title={opt.is_correct ? "Correct answer" : "Click to mark as correct answer"}
                 >
-                  <CheckCircle2 size={20} />
+                  <CheckCircle2 size={18} />
                 </button>
                 <input
                   type="text"
                   value={opt.text}
                   onChange={(e) => updateOptionText(opt.id, e.target.value)}
-                  className="flex-1 p-2 border border-gray-200 rounded"
+                  placeholder={`Option ${optIndex + 1}...`}
+                  className="flex-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800"
                 />
-                <button onClick={() => deleteOption(q.id, opt.id)} className="text-red-400 hover:text-red-600">
+                <button onClick={() => deleteOption(q.id, opt.id)} className="text-red-400 hover:text-red-600 p-1" title="Delete option">
                   <Trash2 size={16} />
                 </button>
               </div>
