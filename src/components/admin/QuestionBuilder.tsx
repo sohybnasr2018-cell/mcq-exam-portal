@@ -24,34 +24,58 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
   }, [examId]);
 
   const loadQuestions = async () => {
-    const { data: qData, error: qError } = await supabase.from('questions').select('*').eq('exam_id', examId).order('order_num');
-    
-    if (qError) {
-      console.error(qError);
+    try {
+      const { data: qData, error: qError } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('exam_id', examId)
+        .order('order_num');
+      
+      if (qError) {
+        console.error('Error loading questions:', qError);
+        return;
+      }
+
+      if (!qData || qData.length === 0) {
+        setQuestions([]);
+        return;
+      }
+
+      const qIds = qData.map(q => q.id);
+
+      const { data: oData, error: oError } = await supabase
+        .from('options')
+        .select('*')
+        .in('question_id', qIds);
+
+      if (oError) {
+        console.error('Error loading options:', oError);
+      }
+
+      const { data: kData, error: kError } = await supabase
+        .from('question_keys')
+        .select('*')
+        .in('question_id', qIds);
+
+      if (kError) {
+        console.error('Error loading question keys:', kError);
+      }
+
+      const loadedQuestions = qData.map(q => {
+        const qOptions = oData?.filter(o => o.question_id === q.id).map(o => ({
+          id: o.id,
+          text: o.text,
+          is_correct: kData?.find(k => k.question_id === q.id)?.correct_option_id === o.id
+        })) || [];
+        return { id: q.id, text: q.text, marks: q.marks, options: qOptions };
+      });
+
+      setQuestions(loadedQuestions);
+    } catch (err) {
+      console.error('Unexpected error loading questions:', err);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (!qData || qData.length === 0) {
-      setQuestions([]);
-      setLoading(false);
-      return;
-    }
-
-    const { data: oData } = await supabase.from('options').in('question_id', qData.map(q => q.id));
-    const { data: kData } = await supabase.from('question_keys').in('question_id', qData.map(q => q.id));
-
-    const loadedQuestions = qData.map(q => {
-      const qOptions = oData?.filter(o => o.question_id === q.id).map(o => ({
-        id: o.id,
-        text: o.text,
-        is_correct: kData?.find(k => k.question_id === q.id)?.correct_option_id === o.id
-      })) || [];
-      return { id: q.id, text: q.text, marks: q.marks, options: qOptions };
-    });
-
-    setQuestions(loadedQuestions);
-    setLoading(false);
   };
 
   const addQuestion = async () => {
@@ -141,7 +165,14 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
     }));
   };
 
-  if (loading) return <div>Loading questions...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8 text-gray-500 space-x-2">
+        <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
+        <span className="text-sm">جاري تحميل الأسئلة... (Loading questions...)</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

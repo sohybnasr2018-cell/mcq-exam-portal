@@ -124,22 +124,44 @@ export default function ExamEditor() {
           </p>
         </div>
 
+        {isNew && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 font-bold text-sm">
+              1
+            </div>
+            <div>
+              <h4 className="font-bold text-amber-900 text-sm">الخطوة الأولى: حفظ بيانات الامتحان</h4>
+              <p className="text-amber-800 text-xs mt-1 leading-relaxed">
+                أدخل عنوان الامتحان والمدة واضغط على زر <strong>"حفظ الامتحان وبدء إضافة الأسئلة"</strong> بالأسفل. سيتم إنشاء الامتحان فوراً وفتح قسم إضافة الأسئلة والاختيارات مباشرة في نفس الصفحة.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end">
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition disabled:opacity-50"
+            className="flex items-center space-x-2 bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 font-semibold shadow-sm"
           >
-            <Save size={20} />
-            <span>{saving ? 'Saving...' : 'Save Exam Details'}</span>
+            <Save size={18} />
+            <span>
+              {saving
+                ? 'جاري الحفظ...'
+                : isNew
+                ? 'حفظ الامتحان وبدء إضافة الأسئلة (Save & Add Questions)'
+                : 'حفظ التعديلات (Save Changes)'}
+            </span>
           </button>
         </div>
       </form>
 
-      {/* Note: In a complete implementation, Question Editor goes here. For brevity, it would manage questions, options, and question_keys using RPCs or RLS bypassing. */}
       {!isNew && (
-        <div className="mt-8 bg-white p-6 rounded-lg shadow-sm">
-           <h3 className="text-xl font-bold mb-4">Questions</h3>
+        <div className="mt-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+           <div className="mb-6 pb-3 border-b border-gray-100">
+             <h3 className="text-xl font-bold text-gray-800">أسئلة الامتحان (Exam Questions)</h3>
+             <p className="text-xs text-gray-400 mt-1">أضف الأسئلة وحدد الإجابات الصحيحة للطلاب</p>
+           </div>
            <QuestionBuilder examId={id!} />
         </div>
       )}
