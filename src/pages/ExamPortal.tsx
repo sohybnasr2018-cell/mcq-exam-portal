@@ -15,7 +15,7 @@ export default function ExamPortal() {
   const [exam, setExam] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [lang, setLang] = useState<'en' | 'ar'>('ar');
+  const [lang] = useState<'en' | 'ar'>('en');
 
   // Registration state
   const [fullName, setFullName] = useState('');
@@ -90,14 +90,10 @@ export default function ExamPortal() {
     const phoneDigits = phone.replace(/\D/g, '');
 
     if (uniCodeDigits.length !== 9) {
-      errors.uniCode = lang === 'ar'
-        ? 'الرقم الجامعي يجب أن يتكون من 9 أرقام بالضبط'
-        : 'University code must be exactly 9 digits';
+      errors.uniCode = 'University code must be exactly 9 digits';
     }
     if (phoneDigits.length !== 11) {
-      errors.phone = lang === 'ar'
-        ? 'رقم الواتساب يجب أن يتكون من 11 رقماً بالضبط'
-        : 'WhatsApp number must be exactly 11 digits';
+      errors.phone = 'WhatsApp number must be exactly 11 digits';
     }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -184,12 +180,12 @@ export default function ExamPortal() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const dir = 'rtl'; // Always RTL for Arabic exam interface
+  const dir = 'ltr'; // Left-to-right for English interface
 
   // ─── Loading ─────────────────────────────────────────────────────────────────
   if (loading && !attempt) return (
     <div className="min-h-screen flex items-center justify-center" dir={dir}>
-      <div className="text-gray-500 text-lg">جاري التحميل...</div>
+      <div className="text-gray-500 text-lg">Loading exam...</div>
     </div>
   );
   if (error) return (
@@ -208,7 +204,7 @@ export default function ExamPortal() {
             {exam?.instructions && <p className="text-gray-500 mt-2 text-sm leading-relaxed">{exam.instructions}</p>}
             <div className="mt-3 inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full">
               <Clock size={14} />
-              <span>مدة الامتحان: {exam?.duration_minutes} دقيقة</span>
+              <span>Duration: {exam?.duration_minutes} minutes</span>
             </div>
           </div>
 
@@ -217,12 +213,12 @@ export default function ExamPortal() {
           <form onSubmit={handleStart} className="space-y-4">
             {/* Full Name */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">الاسم الكامل</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Full Name</label>
               <input
                 required
                 type="text"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-                placeholder="أدخل اسمك الكامل"
+                placeholder="Enter your full name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
               />
@@ -230,7 +226,7 @@ export default function ExamPortal() {
 
             {/* University Code */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">الرقم الجامعي</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">University Code / ID</label>
               <input
                 required
                 type="text"
@@ -238,7 +234,7 @@ export default function ExamPortal() {
                 pattern="\d*"
                 maxLength={9}
                 className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${formErrors.uniCode ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
-                placeholder="9 أرقام"
+                placeholder="9 digits"
                 value={uniCode}
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, '').slice(0, 9);
@@ -247,12 +243,12 @@ export default function ExamPortal() {
                 }}
               />
               {formErrors.uniCode && <p className="text-red-500 text-xs mt-1">{formErrors.uniCode}</p>}
-              <p className="text-gray-400 text-xs mt-1">{uniCode.length} / 9 أرقام</p>
+              <p className="text-gray-400 text-xs mt-1">{uniCode.length} / 9 digits</p>
             </div>
 
             {/* Phone */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">رقم الواتساب</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">WhatsApp Number</label>
               <input
                 required
                 type="tel"
@@ -260,7 +256,7 @@ export default function ExamPortal() {
                 pattern="\d*"
                 maxLength={11}
                 className={`w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition ${formErrors.phone ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
-                placeholder="11 رقماً"
+                placeholder="11 digits"
                 value={phone}
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, '').slice(0, 11);
@@ -269,7 +265,7 @@ export default function ExamPortal() {
                 }}
               />
               {formErrors.phone && <p className="text-red-500 text-xs mt-1">{formErrors.phone}</p>}
-              <p className="text-gray-400 text-xs mt-1">{phone.length} / 11 رقماً</p>
+              <p className="text-gray-400 text-xs mt-1">{phone.length} / 11 digits</p>
             </div>
 
             <button
@@ -277,7 +273,7 @@ export default function ExamPortal() {
               disabled={loading}
               className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold text-base hover:bg-blue-700 transition disabled:opacity-50 mt-2"
             >
-              {loading ? 'جاري بدء الامتحان...' : 'ابدأ الامتحان الآن'}
+              {loading ? 'Starting exam...' : 'Start Exam Now'}
             </button>
           </form>
         </div>
@@ -298,12 +294,12 @@ export default function ExamPortal() {
           <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle size={36} />
           </div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">تم تسليم الامتحان بنجاح</h2>
-          <p className="text-gray-500 mb-6 text-sm">تم حفظ وتوثيق إجاباتك على الخادم.</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Exam Submitted Successfully</h2>
+          <p className="text-gray-500 mb-6 text-sm">Your answers have been securely recorded on the server.</p>
 
           {exam?.show_results && hasScore ? (
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-6 mb-6">
-              <p className="text-sm font-medium text-blue-700 mb-1">درجتك النهائية</p>
+              <p className="text-sm font-medium text-blue-700 mb-1">Your Final Score</p>
               <div className="text-4xl font-extrabold text-blue-900 my-2">
                 {attempt.score} <span className="text-xl text-blue-600 font-semibold">/ {attempt.max_score}</span>
               </div>
@@ -315,20 +311,20 @@ export default function ExamPortal() {
               <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-blue-200/60 text-xs text-gray-600">
                 <div>
                   <span className="block font-semibold text-gray-700 text-sm">{attempt.answered_questions ?? '-'}</span>
-                  <span>أسئلة تمت الإجابة عليها</span>
+                  <span>Questions answered</span>
                 </div>
                 <div>
                   <span className="block font-semibold text-gray-700 text-sm">{attempt.unanswered_questions ?? '-'}</span>
-                  <span>أسئلة بدون إجابة</span>
+                  <span>Unanswered</span>
                 </div>
               </div>
             </div>
           ) : (
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 text-sm text-gray-600">
-              سيتم مراجعة النتائج واعتمادها من قِبل إدارة الامتحان.
+              Results will be reviewed and announced by the administration.
             </div>
           )}
-          <div className="text-xs text-gray-400">امتحان: {exam?.title}</div>
+          <div className="text-xs text-gray-400">Exam: {exam?.title}</div>
         </div>
       </div>
     );
@@ -374,14 +370,14 @@ export default function ExamPortal() {
                   ? 'bg-green-500 text-white border-green-500'
                   : 'bg-white text-gray-500 border-gray-300 hover:border-blue-400'
               }`}
-              title={`سؤال ${i + 1}`}
+              title={`Question ${i + 1}`}
             >
               {i + 1}
             </button>
           ))}
         </div>
         <p className="text-center text-xs text-gray-400 mt-2">
-          تمت الإجابة على {answeredCount} من أصل {totalQuestions} سؤال
+          Answered {answeredCount} of {totalQuestions} questions
         </p>
       </div>
 
@@ -424,7 +420,7 @@ export default function ExamPortal() {
                       className="sr-only"
                     />
                     <span className="text-gray-700 text-base">{opt.text}</span>
-                    {isSelected && <CheckCircle2 size={18} className="text-blue-500 mr-auto shrink-0" />}
+                    {isSelected && <CheckCircle2 size={18} className="text-blue-500 ml-auto shrink-0" />}
                   </label>
                 );
               })}
@@ -440,28 +436,18 @@ export default function ExamPortal() {
             disabled={currentIndex === 0}
             className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-gray-200 text-gray-600 font-semibold rounded-xl hover:border-blue-400 hover:text-blue-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <ChevronRight size={20} />
-            السابق
+            <ChevronLeft size={20} />
+            Previous
           </button>
 
-          {/* Submit button (center, shown when last question OR any time) */}
-          {currentIndex === totalQuestions - 1 ? (
-            <button
-              onClick={() => submitExam('manual')}
-              disabled={loading}
-              className="flex-1 bg-green-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-green-700 transition disabled:opacity-50 text-center"
-            >
-              {loading ? 'جاري التسليم...' : '✓ تسليم الامتحان'}
-            </button>
-          ) : (
-            <button
-              onClick={() => submitExam('manual')}
-              disabled={loading}
-              className="flex-1 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-green-700 transition disabled:opacity-50 text-sm text-center"
-            >
-              {loading ? 'جاري التسليم...' : 'تسليم الامتحان'}
-            </button>
-          )}
+          {/* Submit button */}
+          <button
+            onClick={() => submitExam('manual')}
+            disabled={loading}
+            className="flex-1 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-green-700 transition disabled:opacity-50 text-center"
+          >
+            {loading ? 'Submitting...' : currentIndex === totalQuestions - 1 ? '✓ Submit Exam' : 'Submit Exam'}
+          </button>
 
           {/* Next */}
           <button
@@ -469,8 +455,8 @@ export default function ExamPortal() {
             disabled={currentIndex === totalQuestions - 1}
             className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            التالي
-            <ChevronLeft size={20} />
+            Next
+            <ChevronRight size={20} />
           </button>
         </div>
       </main>
