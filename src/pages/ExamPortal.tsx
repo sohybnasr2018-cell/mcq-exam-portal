@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, CheckCircle2, Shield, ShieldAlert, AlertTriangle } from 'lucide-react';
 
 const CheckCircle = ({ size, className }: { size: number; className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -32,9 +32,102 @@ export default function ExamPortal() {
   // Single-question navigation
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Anti-Cheat & Screen Protection state
+  const [isScreenBlurred, setIsScreenBlurred] = useState(false);
+  const [violationsCount, setViolationsCount] = useState(0);
+  const [showViolationAlert, setShowViolationAlert] = useState(false);
+
   useEffect(() => {
     loadExam();
   }, [examId]);
+
+  // Anti-Cheat: Screen protection & tab switch monitoring
+  useEffect(() => {
+    if (!attempt || attempt.status !== 'in_progress') return;
+
+    let hasBlurred = false;
+
+    const handleBlur = () => {
+      setIsScreenBlurred(true);
+      hasBlurred = true;
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsScreenBlurred(true);
+        hasBlurred = true;
+      }
+    };
+
+    const handleFocus = () => {
+      if (hasBlurred) {
+        setViolationsCount(prev => prev + 1);
+        setShowViolationAlert(true);
+        hasBlurred = false;
+      }
+      setIsScreenBlurred(false);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Intercept PrintScreen
+      if (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44) {
+        e.preventDefault();
+        setIsScreenBlurred(true);
+        hasBlurred = true;
+        setViolationsCount(prev => prev + 1);
+        setShowViolationAlert(true);
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText('');
+          }
+        } catch (_) {}
+        return;
+      }
+
+      // Block Ctrl/Cmd combinations: Print (P), Save (S), Source (U), Copy (C), Cut (X), SelectAll (A)
+      if (e.ctrlKey || e.metaKey) {
+        const key = e.key.toLowerCase();
+        if (['p', 's', 'u', 'c', 'x', 'a'].includes(key)) {
+          e.preventDefault();
+        }
+        // Block DevTools shortcuts (Ctrl+Shift+I / J / C)
+        if (e.shiftKey && ['i', 'j', 'c'].includes(key)) {
+          e.preventDefault();
+        }
+      }
+
+      // Block F12
+      if (e.key === 'F12') {
+        e.preventDefault();
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleCopyCut = (e: ClipboardEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('blur', handleBlur);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('copy', handleCopyCut);
+    window.addEventListener('cut', handleCopyCut);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('copy', handleCopyCut);
+      window.removeEventListener('cut', handleCopyCut);
+    };
+  }, [attempt?.status]);
 
   // Timer
   useEffect(() => {
@@ -336,11 +429,84 @@ export default function ExamPortal() {
   const totalQuestions = questions.length;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col" dir={dir}>
+    <div
+      className="min-h-screen bg-gray-50 flex flex-col select-none"
+      dir={dir}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {/* Print protection style: hides entire page if printed */}
+      <style>{`
+        @media print {
+          body, html {
+            display: none !important;
+            visibility: hidden !important;
+          }
+        }
+      `}</style>
+
+      {/* Screen Protection Shield Overlay (Active during screenshots / focus loss) */}
+      {isScreenBlurred && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center text-white text-center p-6 select-none animate-in fade-in duration-100">
+          <div className="w-20 h-20 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-5 ring-8 ring-red-500/10">
+            <ShieldAlert size={44} />
+          </div>
+          <h2 className="text-2xl font-bold mb-2">⚠️ Screen Protected / الشاشة محمية</h2>
+          <p className="text-slate-300 max-w-md text-sm leading-relaxed mb-6">
+            Screenshots, screen capture tools, and switching tabs are strictly prohibited during the exam.
+            <br />
+            <span className="text-xs text-slate-400 mt-2 block">
+              ممنوع التقاط لقطات الشاشة أو مغادرة صفحة الامتحان. انقر للمتابعة.
+            </span>
+          </p>
+          <button
+            onClick={() => setIsScreenBlurred(false)}
+            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition shadow-lg"
+          >
+            Click to Return to Exam (العودة للامتحان)
+          </button>
+        </div>
+      )}
+
+      {/* Security Alert Modal (Triggered when user returns after leaving) */}
+      {showViolationAlert && !isScreenBlurred && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center border border-amber-200">
+            <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle size={28} />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Security Warning / تنبيه أمني</h3>
+            <p className="text-slate-600 text-sm mb-4 leading-relaxed">
+              You navigated away from the exam or triggered a screen capture shortcut.
+              <br />
+              <span className="text-red-600 font-bold mt-2 block">
+                تم رصد مغادرة شاشة الامتحان أو محاولة تصوير (مخالفة رقم: {violationsCount})
+              </span>
+            </p>
+            <button
+              onClick={() => setShowViolationAlert(false)}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl font-bold text-sm transition"
+            >
+              I Understand & Continue (موافق والمتابعة)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-20">
         <div className="w-full px-4 md:px-8 py-3 flex justify-between items-center gap-4">
-          <h1 className="font-bold text-lg text-gray-800 truncate flex-1">{exam?.title}</h1>
+          <div className="flex items-center gap-3 truncate flex-1">
+            <h1 className="font-bold text-lg text-gray-800 truncate">{exam?.title}</h1>
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-semibold shrink-0">
+              <Shield size={13} />
+              <span>Protected</span>
+              {violationsCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
+                  {violationsCount} {violationsCount === 1 ? 'alert' : 'alerts'}
+                </span>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-3 shrink-0">
             <div className={`flex items-center gap-2 font-mono text-base font-bold px-3 py-1.5 rounded-lg ${timeLeft !== null && timeLeft < 300 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
               <Clock size={16} />
