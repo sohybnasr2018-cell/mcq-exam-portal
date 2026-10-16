@@ -56,7 +56,7 @@ export default function ResultsViewer() {
   const exportCSV = () => {
     if (attempts.length === 0) return;
     
-    const headers = ['Student Name', 'University Code', 'Phone', 'Status', 'Score', 'Max Score', 'Started At', 'Submitted At', 'Submission Type'];
+    const headers = ['Student Name', 'University Code', 'Phone', 'Status', 'Score', 'Max Score', 'Violations (Tab Switches)', 'Started At', 'Submitted At', 'Submission Type'];
     const rows = attempts.map(a => [
       a.students?.full_name ?? '',
       a.students?.university_code ?? '',
@@ -64,6 +64,7 @@ export default function ResultsViewer() {
       a.status,
       a.score ?? '',
       a.max_score ?? '',
+      a.violations ?? 0,
       a.started_at,
       a.submitted_at ?? '',
       a.submission_type ?? ''
@@ -193,7 +194,7 @@ export default function ResultsViewer() {
       </div>
 
       <div className="bg-white rounded-lg shadow-sm overflow-hidden overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[900px]">
+        <table className="w-full text-left border-collapse min-w-[950px]">
           <thead>
             <tr className="bg-gray-50 border-b text-sm">
               <th className="p-4 font-semibold text-gray-600">Student Name</th>
@@ -201,6 +202,7 @@ export default function ResultsViewer() {
               <th className="p-4 font-semibold text-gray-600">Phone</th>
               <th className="p-4 font-semibold text-gray-600">Status</th>
               <th className="p-4 font-semibold text-gray-600">Score</th>
+              <th className="p-4 font-semibold text-gray-600">Violations (الخروج/التصوير)</th>
               <th className="p-4 font-semibold text-gray-600">Started At</th>
               <th className="p-4 font-semibold text-gray-600">Submitted At</th>
               <th className="p-4 font-semibold text-gray-600">Answers</th>
@@ -208,9 +210,9 @@ export default function ResultsViewer() {
           </thead>
           <tbody>
             {loading && selectedExam ? (
-              <tr><td colSpan={8} className="p-4 text-center">Loading results...</td></tr>
+              <tr><td colSpan={9} className="p-4 text-center">Loading results...</td></tr>
             ) : attempts.length === 0 ? (
-              <tr><td colSpan={8} className="p-4 text-center text-gray-500">No attempts found for this exam.</td></tr>
+              <tr><td colSpan={9} className="p-4 text-center text-gray-500">No attempts found for this exam.</td></tr>
             ) : attempts.map(a => (
               <tr key={a.id} className="border-b hover:bg-gray-50 text-sm">
                 <td className="p-4 font-medium">{a.students?.full_name ?? '-'}</td>
@@ -226,6 +228,17 @@ export default function ResultsViewer() {
                 </td>
                 <td className="p-4 font-semibold">
                   {a.score !== null ? `${a.score} / ${a.max_score}` : '-'}
+                </td>
+                <td className="p-4">
+                  {(a.violations ?? 0) > 0 ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 font-bold rounded-full text-xs whitespace-nowrap">
+                      ⚠️ {a.violations} {a.violations === 1 ? 'مرة' : 'مرات'}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 font-semibold rounded-full text-xs whitespace-nowrap">
+                      ✓ 0 (ملتزم)
+                    </span>
+                  )}
                 </td>
                 <td className="p-4 text-gray-500 whitespace-nowrap">
                   {format(new Date(a.started_at), 'MMM d, HH:mm:ss')}
@@ -263,6 +276,15 @@ export default function ResultsViewer() {
                     'bg-red-500/20 text-red-300 border border-red-500/40'
                   }`}>
                     {selectedAttempt.status}
+                  </span>
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                    (selectedAttempt.violations ?? 0) > 0
+                      ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                  }`}>
+                    {(selectedAttempt.violations ?? 0) > 0
+                      ? `⚠️ ${selectedAttempt.violations} مخالفة خروج/تصوير`
+                      : '✓ 0 مخالفات خروج'}
                   </span>
                 </div>
                 <p className="text-slate-400 text-xs mt-1.5 flex gap-4 flex-wrap">

@@ -59,10 +59,17 @@ export default function ExamPortal() {
       }
     };
 
+    const recordViolationOnServer = async () => {
+      try {
+        await supabase.rpc('record_violation', { p_attempt_id: attempt.id });
+      } catch (_) {}
+    };
+
     const handleFocus = () => {
       if (hasBlurred) {
         setViolationsCount(prev => prev + 1);
         setShowViolationAlert(true);
+        recordViolationOnServer();
         hasBlurred = false;
       }
       setIsScreenBlurred(false);
@@ -76,6 +83,7 @@ export default function ExamPortal() {
         hasBlurred = true;
         setViolationsCount(prev => prev + 1);
         setShowViolationAlert(true);
+        recordViolationOnServer();
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText('');
