@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, ChevronLeft, ChevronRight, CheckCircle2, Shield, ShieldAlert, AlertTriangle, Bookmark, Maximize2, Minimize2 } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, CheckCircle2, Bookmark } from 'lucide-react';
 
 const CheckCircle = ({ size, className }: { size: number; className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -35,119 +35,65 @@ export default function ExamPortal() {
   // Bookmark / Flag for review state
   const [bookmarks, setBookmarks] = useState<Record<string, boolean>>({});
 
-  // Anti-Cheat & Screen Protection state
-  const [isScreenBlurred, setIsScreenBlurred] = useState(false);
-  const [violationsCount, setViolationsCount] = useState(0);
-  const [showViolationAlert, setShowViolationAlert] = useState(false);
-  const [isTerminated, setIsTerminated] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
   useEffect(() => {
     loadExam();
   }, [examId]);
 
-  // Anti-Cheat: Screen protection, mouse leave, fullscreen & tab switch monitoring
+  // Silent tracking of exam tab switches and screenshot attempts
   useEffect(() => {
     if (!attempt || attempt.status !== 'in_progress') return;
 
     let hasBlurred = false;
-    const MAX_VIOLATIONS = 3;
 
-    const applyScreenProtection = () => {
-      document.body.classList.add('screen-protected');
-      setIsScreenBlurred(true);
-      hasBlurred = true;
-    };
-
-    const recordViolationOnServer = async () => {
+    const recordEvent = async (type: 'tab_switch' | 'screenshot') => {
       try {
-        await supabase.rpc('record_violation', { p_attempt_id: attempt.id });
-      } catch (_) {}
-    };
-
-    const handleFocus = () => {
-      document.body.classList.remove('screen-protected');
-      setIsScreenBlurred(false);
-
-      if (hasBlurred) {
-        hasBlurred = false;
-        recordViolationOnServer();
-        setViolationsCount(prev => {
-          const nextCount = prev + 1;
-          if (nextCount >= MAX_VIOLATIONS) {
-            setIsTerminated(true);
-            submitExam('auto_violation');
-          } else {
-            setShowViolationAlert(true);
-          }
-          return nextCount;
-        });
+        await supabase.rpc('record_violation', { p_attempt_id: attempt.id, p_type: type });
+      } catch (_) {
+        try {
+          await supabase.rpc('record_violation', { p_attempt_id: attempt.id });
+        } catch (_) {}
       }
     };
 
     const handleBlur = () => {
-      applyScreenProtection();
+      hasBlurred = true;
     };
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        applyScreenProtection();
-      } else {
-        handleFocus();
+        hasBlurred = true;
+      } else if (hasBlurred) {
+        hasBlurred = false;
+        recordEvent('tab_switch');
       }
     };
 
-    const handleMouseLeave = () => {
-      applyScreenProtection();
-    };
-
-    const handleMouseEnter = () => {
-      if (!document.hidden && hasBlurred) {
-        handleFocus();
-      }
-    };
-
-    const handleFullscreenChange = () => {
-      const isFull = !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
-      setIsFullscreen(isFull);
-      if (!isFull) {
-        applyScreenProtection();
+    const handleFocus = () => {
+      if (hasBlurred) {
+        hasBlurred = false;
+        recordEvent('tab_switch');
       }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Intercept PrintScreen
       if (e.key === 'PrintScreen' || e.code === 'PrintScreen' || e.keyCode === 44) {
-        e.preventDefault();
-        applyScreenProtection();
-        hasBlurred = true;
-        handleFocus();
+        recordEvent('screenshot');
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText('');
           }
         } catch (_) {}
-        return;
       }
 
-      // Block Ctrl/Cmd combinations: Print (P), Save (S), Source (U), Copy (C), Cut (X), SelectAll (A)
+      // Block Ctrl/Cmd combinations silently without alerts
       if (e.ctrlKey || e.metaKey) {
         const key = e.key.toLowerCase();
         if (['p', 's', 'u', 'c', 'x', 'a'].includes(key)) {
           e.preventDefault();
-          try {
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-              navigator.clipboard.writeText('');
-            }
-          } catch (_) {}
-        }
-        // Block DevTools shortcuts (Ctrl+Shift+I / J / C)
-        if (e.shiftKey && ['i', 'j', 'c'].includes(key)) {
-          e.preventDefault();
         }
       }
 
-      // Block F12
       if (e.key === 'F12') {
         e.preventDefault();
       }
@@ -157,37 +103,18 @@ export default function ExamPortal() {
       e.preventDefault();
     };
 
-    const handleCopyCut = (e: ClipboardEvent) => {
-      e.preventDefault();
-    };
-
     window.addEventListener('blur', handleBlur);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
-    window.addEventListener('pagehide', handleBlur);
-    document.documentElement.addEventListener('mouseleave', handleMouseLeave);
-    document.documentElement.addEventListener('mouseenter', handleMouseEnter);
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('contextmenu', handleContextMenu);
-    window.addEventListener('copy', handleCopyCut);
-    window.addEventListener('cut', handleCopyCut);
 
     return () => {
-      document.body.classList.remove('screen-protected');
       window.removeEventListener('blur', handleBlur);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('pagehide', handleBlur);
-      document.documentElement.removeEventListener('mouseleave', handleMouseLeave);
-      document.documentElement.removeEventListener('mouseenter', handleMouseEnter);
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('contextmenu', handleContextMenu);
-      window.removeEventListener('copy', handleCopyCut);
-      window.removeEventListener('cut', handleCopyCut);
     };
   }, [attempt?.status]);
 
@@ -260,23 +187,6 @@ export default function ExamPortal() {
     setLoading(false);
   };
 
-  const toggleFullscreen = async () => {
-    try {
-      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-        const el = document.documentElement as any;
-        if (el.requestFullscreen) await el.requestFullscreen();
-        else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-        setIsFullscreen(true);
-      } else {
-        if (document.exitFullscreen) await document.exitFullscreen();
-        else if ((document as any).webkitExitFullscreen) await (document as any).webkitExitFullscreen();
-        setIsFullscreen(false);
-      }
-    } catch (err) {
-      console.warn('Fullscreen toggle failed:', err);
-    }
-  };
-
   const toggleBookmark = (questionId: string) => {
     setBookmarks(prev => {
       const next = { ...prev, [questionId]: !prev[questionId] };
@@ -309,14 +219,6 @@ export default function ExamPortal() {
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
-
-    // Trigger Fullscreen on user click
-    try {
-      const el = document.documentElement as any;
-      if (el.requestFullscreen) el.requestFullscreen();
-      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-      setIsFullscreen(true);
-    } catch (_) {}
 
     setLoading(true);
     setError('');
@@ -366,7 +268,7 @@ export default function ExamPortal() {
     );
   };
 
-  const submitExam = async (type: 'manual' | 'auto' | 'auto_violation') => {
+  const submitExam = async (type: 'manual' | 'auto') => {
     if (type === 'manual') {
       const confirmMsg = lang === 'ar'
         ? 'هل أنت متأكد من تسليم الامتحان؟ لا يمكنك تغيير إجاباتك بعد التسليم.'
@@ -510,22 +412,14 @@ export default function ExamPortal() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir={dir}>
         <div className="bg-white p-8 rounded-2xl shadow-lg max-w-md w-full text-center border border-gray-100">
-          {isAutoViolation ? (
-            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ShieldAlert size={36} />
-            </div>
-          ) : (
-            <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle size={36} />
-            </div>
-          )}
-          <h2 className={`text-2xl font-bold mb-2 ${isAutoViolation ? 'text-red-600' : 'text-gray-800'}`}>
-            {isAutoViolation ? 'Exam Terminated / تم إنهاء الامتحان' : 'Exam Submitted Successfully'}
+          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <CheckCircle size={36} />
+          </div>
+          <h2 className="text-2xl font-bold mb-2 text-gray-800">
+            Exam Submitted Successfully
           </h2>
           <p className="text-gray-500 mb-6 text-sm">
-            {isAutoViolation
-              ? 'تم إنهاء الامتحان وتسليمه تلقائياً لتجاوز الحد الأقصى للمخالفات الأمنية أو محاولات تصوير الشاشة ومغادرة الصفحة.'
-              : 'Your answers have been securely recorded on the server.'}
+            Your answers have been securely recorded on the server.
           </p>
 
           {exam?.show_results && hasScore ? (
@@ -567,170 +461,17 @@ export default function ExamPortal() {
   const bookmarkedCount = Object.keys(bookmarks).length;
   const totalQuestions = questions.length;
 
-  const studentName = fullName || attempt?.students?.full_name || '';
-  const studentCode = uniCode || attempt?.students?.university_code || '';
-  const studentPhone = phone || attempt?.students?.phone_number || '';
-  const watermarkText = (studentCode || studentName)
-    ? `${studentName} • ${studentCode} • ${studentPhone}`
-    : 'CONFIDENTIAL EXAM • SECURE PORTAL';
-
   return (
     <div
-      className="min-h-screen bg-gray-50 flex flex-col select-none relative overflow-x-hidden"
+      className="min-h-screen bg-gray-50 flex flex-col select-none"
       dir={dir}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Print protection & Mobile touch security & Instant CSS Obfuscation */}
-      <style>{`
-        @media print {
-          body, html {
-            display: none !important;
-            visibility: hidden !important;
-          }
-        }
-        * {
-          -webkit-touch-callout: none !important;
-          -webkit-user-select: none !important;
-          user-select: none !important;
-        }
-        body.screen-protected .exam-protected-content {
-          filter: blur(40px) grayscale(100%) !important;
-          opacity: 0.05 !important;
-          pointer-events: none !important;
-          user-select: none !important;
-          transition: filter 0.05s ease;
-        }
-      `}</style>
-
-      {/* Dynamic Anti-Leak Security Watermark Grid */}
-      <div
-        className="fixed inset-0 pointer-events-none z-10 overflow-hidden select-none opacity-[0.06] flex flex-col justify-around rotate-[-12deg] scale-125"
-        aria-hidden="true"
-      >
-        {Array.from({ length: 12 }).map((_, r) => (
-          <div key={r} className="flex justify-around whitespace-nowrap text-xs md:text-sm font-mono font-black text-slate-900 tracking-wider">
-            {Array.from({ length: 5 }).map((_, c) => (
-              <span key={c} className="px-6 py-4">
-                {watermarkText}
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      {/* Screen Protection Shield Overlay (Active during screenshots / focus loss / fullscreen exit) */}
-      {isScreenBlurred && !isTerminated && (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center text-white text-center p-6 select-none animate-in fade-in duration-100">
-          <div className="w-20 h-20 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mb-5 ring-8 ring-red-500/10">
-            <ShieldAlert size={44} />
-          </div>
-          <h2 className="text-2xl font-bold mb-2">⚠️ Screen Protected / الشاشة محمية</h2>
-          <p className="text-slate-300 max-w-md text-sm leading-relaxed mb-6">
-            Screenshots, screen capture tools, and switching tabs are strictly prohibited during the exam.
-            <br />
-            <span className="text-xs text-slate-400 mt-2 block">
-              ممنوع التقاط لقطات الشاشة أو مغادرة صفحة الامتحان. انقر للمتابعة والعودة لملء الشاشة.
-            </span>
-          </p>
-          <button
-            onClick={() => {
-              setIsScreenBlurred(false);
-              document.body.classList.remove('screen-protected');
-              try {
-                const el = document.documentElement as any;
-                if (el.requestFullscreen) el.requestFullscreen();
-                else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-              } catch (_) {}
-            }}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition shadow-lg"
-          >
-            Click to Return to Exam (العودة للامتحان)
-          </button>
-        </div>
-      )}
-
-      {/* Security Alert Modal (Triggered when user returns after leaving) */}
-      {showViolationAlert && !isScreenBlurred && !isTerminated && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center border border-amber-300">
-            <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
-              <AlertTriangle size={28} />
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Security Warning / تنبيه أمني</h3>
-            <div className="my-3 p-3 bg-amber-50 rounded-xl border border-amber-200">
-              <p className="text-sm font-bold text-amber-900">
-                Violation {violationsCount} of 3 (مخالفة {violationsCount} من 3)
-              </p>
-              <p className="text-xs text-amber-700 mt-1 font-semibold">
-                {3 - violationsCount === 1
-                  ? '⚠️ تحذير أخير! أي محاولة تصوير أو مغادرة أخرى ستؤدي لتسليم الامتحان فوراً.'
-                  : `⚠️ متبقي لك ${Math.max(0, 3 - violationsCount)} إنذارات قبل سحب وتسليم الامتحان تلقائياً.`}
-              </p>
-            </div>
-            <p className="text-slate-600 text-xs mb-4 leading-relaxed">
-              Screenshots, screen recording tools, and switching tabs are prohibited.
-              <br />
-              <span className="text-red-600 font-bold mt-1 block">
-                تم رصد مغادرة شاشة الامتحان أو محاولة تصوير الشاشة.
-              </span>
-            </p>
-            <button
-              onClick={() => setShowViolationAlert(false)}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl font-bold text-sm transition"
-            >
-              I Understand & Continue (موافق ومتابعة الامتحان)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Terminated Modal (When 3 violations reached) */}
-      {isTerminated && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center border-2 border-red-500 animate-in zoom-in-95">
-            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <ShieldAlert size={36} />
-            </div>
-            <h3 className="text-xl font-bold text-red-600 mb-2">Exam Terminated / تم إلغاء الامتحان</h3>
-            <p className="text-gray-700 text-sm mb-4 leading-relaxed">
-              You exceeded the maximum allowed security violations (3 violations).
-              <br />
-              <span className="font-bold text-red-600 mt-2 block">
-                تم إنهاء الامتحان وتسليمه تلقائياً بسبب تكرار محاولات تصوير الشاشة أو مغادرة الامتحان.
-              </span>
-            </p>
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-medium">
-              تم تسجيل كافة المخالفات وإرسالها للإدارة.
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-20">
         <div className="w-full px-4 md:px-8 py-3 flex justify-between items-center gap-4">
           <div className="flex items-center gap-3 truncate flex-1">
             <h1 className="font-bold text-lg text-gray-800 truncate">{exam?.title}</h1>
-            <div className="flex items-center gap-2">
-              <div className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-semibold shrink-0">
-                <Shield size={13} />
-                <span>Protected</span>
-                {violationsCount > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5">
-                    {violationsCount}/3
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={toggleFullscreen}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 rounded-lg text-xs font-semibold shrink-0 transition"
-                title="Toggle Fullscreen Mode (ملء الشاشة)"
-              >
-                {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-                <span className="hidden sm:inline">{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-              </button>
-            </div>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             <div className={`flex items-center gap-2 font-mono text-base font-bold px-3 py-1.5 rounded-lg ${timeLeft !== null && timeLeft < 300 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
@@ -806,9 +547,9 @@ export default function ExamPortal() {
       </div>
 
       {/* Main question area */}
-      <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 py-6 relative z-10">
+      <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 py-6">
         {currentQuestion && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex-1 exam-protected-content relative">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex-1">
             {/* Question card top bar: Question counter & Bookmark toggle */}
             <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100 flex-wrap">
               <div className="flex items-center gap-2">
@@ -887,12 +628,6 @@ export default function ExamPortal() {
                   </label>
                 );
               })}
-            </div>
-
-            {/* Security student stamp footer on question card */}
-            <div className="flex items-center justify-between text-[11px] font-mono text-gray-400 border-t border-gray-100 pt-3 mt-6 select-none">
-              <span>CONFIDENTIAL &amp; PROTECTED EXAM</span>
-              <span>ID: {studentCode || '-'} | {studentName || 'Student'}</span>
             </div>
           </div>
         )}

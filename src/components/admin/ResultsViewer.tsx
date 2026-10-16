@@ -56,7 +56,7 @@ export default function ResultsViewer() {
   const exportCSV = () => {
     if (attempts.length === 0) return;
     
-    const headers = ['Student Name', 'University Code', 'Phone', 'Status', 'Score', 'Max Score', 'Violations (Tab Switches)', 'Started At', 'Submitted At', 'Submission Type'];
+    const headers = ['Student Name', 'University Code', 'Phone', 'Status', 'Score', 'Max Score', 'Tab Switches (مرات الخروج)', 'Screenshots (لقطات الشاشة)', 'Started At', 'Submitted At', 'Submission Type'];
     const rows = attempts.map(a => [
       a.students?.full_name ?? '',
       a.students?.university_code ?? '',
@@ -64,7 +64,8 @@ export default function ResultsViewer() {
       a.status,
       a.score ?? '',
       a.max_score ?? '',
-      a.violations ?? 0,
+      a.tab_switches ?? a.violations ?? 0,
+      a.screenshots ?? 0,
       a.started_at,
       a.submitted_at ?? '',
       a.submission_type ?? ''
@@ -202,7 +203,7 @@ export default function ResultsViewer() {
               <th className="p-4 font-semibold text-gray-600">Phone</th>
               <th className="p-4 font-semibold text-gray-600">Status</th>
               <th className="p-4 font-semibold text-gray-600">Score</th>
-              <th className="p-4 font-semibold text-gray-600">Violations (الخروج/التصوير)</th>
+              <th className="p-4 font-semibold text-gray-600">سجل الخروج ولقطات الشاشة</th>
               <th className="p-4 font-semibold text-gray-600">Started At</th>
               <th className="p-4 font-semibold text-gray-600">Submitted At</th>
               <th className="p-4 font-semibold text-gray-600">Answers</th>
@@ -219,37 +220,34 @@ export default function ResultsViewer() {
                 <td className="p-4 text-gray-600">{a.students?.university_code ?? '-'}</td>
                 <td className="p-4 text-gray-600">{a.students?.phone_number ?? '-'}</td>
                 <td className="p-4">
-                  <div className="flex flex-col gap-1 items-start">
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      a.status === 'submitted' ? 'bg-green-100 text-green-700' : 
-                      a.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {a.status}
-                    </span>
-                    {a.submission_type === 'auto_violation' && (
-                      <span className="text-[10px] font-bold text-red-700 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded whitespace-nowrap">
-                        🚨 Auto (مخالفات)
-                      </span>
-                    )}
-                  </div>
+                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                    a.status === 'submitted' ? 'bg-green-100 text-green-700' : 
+                    a.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                  }`}>
+                    {a.status}
+                  </span>
                 </td>
                 <td className="p-4 font-semibold">
                   {a.score !== null ? `${a.score} / ${a.max_score}` : '-'}
                 </td>
                 <td className="p-4">
-                  {(a.violations ?? 0) >= 3 ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-600 text-white font-black rounded-full text-xs whitespace-nowrap shadow-xs">
-                      🚨 {a.violations} (الحد الأقصى)
-                    </span>
-                  ) : (a.violations ?? 0) > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 font-bold rounded-full text-xs whitespace-nowrap">
-                      ⚠️ {a.violations} {a.violations === 1 ? 'مرة' : 'مرات'}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 font-semibold rounded-full text-xs whitespace-nowrap">
-                      ✓ 0 (ملتزم)
-                    </span>
-                  )}
+                  <div className="flex flex-col gap-1 items-start whitespace-nowrap text-xs">
+                    {(a.tab_switches ?? a.violations ?? 0) > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 font-semibold rounded-md">
+                        📱 خروج: <strong>{a.tab_switches ?? a.violations}</strong> {(a.tab_switches ?? a.violations) === 1 ? 'مرة' : 'مرات'}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-[11px]">📱 خروج: 0</span>
+                    )}
+
+                    {(a.screenshots ?? 0) > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-800 border border-purple-200 font-semibold rounded-md">
+                        📸 لقطات: <strong>{a.screenshots}</strong>
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-[11px]">📸 لقطات: 0</span>
+                    )}
+                  </div>
                 </td>
                 <td className="p-4 text-gray-500 whitespace-nowrap">
                   {format(new Date(a.started_at), 'MMM d, HH:mm:ss')}
@@ -288,24 +286,12 @@ export default function ResultsViewer() {
                   }`}>
                     {selectedAttempt.status}
                   </span>
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                    (selectedAttempt.violations ?? 0) >= 3
-                      ? 'bg-red-500/30 text-red-200 border border-red-500 font-black'
-                      : (selectedAttempt.violations ?? 0) > 0
-                      ? 'bg-red-500/20 text-red-300 border border-red-500/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  }`}>
-                    {(selectedAttempt.violations ?? 0) >= 3
-                      ? `🚨 ${selectedAttempt.violations} مخالفة (تم سحب الامتحان)`
-                      : (selectedAttempt.violations ?? 0) > 0
-                      ? `⚠️ ${selectedAttempt.violations} مخالفة خروج/تصوير`
-                      : '✓ 0 مخالفات خروج'}
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    📱 مرات الخروج: {selectedAttempt.tab_switches ?? selectedAttempt.violations ?? 0}
                   </span>
-                  {selectedAttempt.submission_type === 'auto_violation' && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white border border-red-400">
-                      🚨 تسليم إجباري بسبب محاولات تصوير/مغادرة
-                    </span>
-                  )}
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                    📸 لقطات الشاشة: {selectedAttempt.screenshots ?? 0}
+                  </span>
                 </div>
                 <p className="text-slate-400 text-xs mt-1.5 flex gap-4 flex-wrap">
                   <span>ID: {selectedAttempt.students?.university_code ?? '-'}</span>
