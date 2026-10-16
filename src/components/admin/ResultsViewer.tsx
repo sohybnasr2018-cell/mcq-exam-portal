@@ -219,18 +219,29 @@ export default function ResultsViewer() {
                 <td className="p-4 text-gray-600">{a.students?.university_code ?? '-'}</td>
                 <td className="p-4 text-gray-600">{a.students?.phone_number ?? '-'}</td>
                 <td className="p-4">
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    a.status === 'submitted' ? 'bg-green-100 text-green-700' : 
-                    a.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                    {a.status}
-                  </span>
+                  <div className="flex flex-col gap-1 items-start">
+                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      a.status === 'submitted' ? 'bg-green-100 text-green-700' : 
+                      a.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {a.status}
+                    </span>
+                    {a.submission_type === 'auto_violation' && (
+                      <span className="text-[10px] font-bold text-red-700 bg-red-100 border border-red-300 px-1.5 py-0.5 rounded whitespace-nowrap">
+                        🚨 Auto (مخالفات)
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="p-4 font-semibold">
                   {a.score !== null ? `${a.score} / ${a.max_score}` : '-'}
                 </td>
                 <td className="p-4">
-                  {(a.violations ?? 0) > 0 ? (
+                  {(a.violations ?? 0) >= 3 ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-600 text-white font-black rounded-full text-xs whitespace-nowrap shadow-xs">
+                      🚨 {a.violations} (الحد الأقصى)
+                    </span>
+                  ) : (a.violations ?? 0) > 0 ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-100 text-red-700 font-bold rounded-full text-xs whitespace-nowrap">
                       ⚠️ {a.violations} {a.violations === 1 ? 'مرة' : 'مرات'}
                     </span>
@@ -278,14 +289,23 @@ export default function ResultsViewer() {
                     {selectedAttempt.status}
                   </span>
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                    (selectedAttempt.violations ?? 0) > 0
+                    (selectedAttempt.violations ?? 0) >= 3
+                      ? 'bg-red-500/30 text-red-200 border border-red-500 font-black'
+                      : (selectedAttempt.violations ?? 0) > 0
                       ? 'bg-red-500/20 text-red-300 border border-red-500/40'
                       : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                   }`}>
-                    {(selectedAttempt.violations ?? 0) > 0
+                    {(selectedAttempt.violations ?? 0) >= 3
+                      ? `🚨 ${selectedAttempt.violations} مخالفة (تم سحب الامتحان)`
+                      : (selectedAttempt.violations ?? 0) > 0
                       ? `⚠️ ${selectedAttempt.violations} مخالفة خروج/تصوير`
                       : '✓ 0 مخالفات خروج'}
                   </span>
+                  {selectedAttempt.submission_type === 'auto_violation' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white border border-red-400">
+                      🚨 تسليم إجباري بسبب محاولات تصوير/مغادرة
+                    </span>
+                  )}
                 </div>
                 <p className="text-slate-400 text-xs mt-1.5 flex gap-4 flex-wrap">
                   <span>ID: {selectedAttempt.students?.university_code ?? '-'}</span>
