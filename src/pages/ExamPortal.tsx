@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, ChevronLeft, ChevronRight, CheckCircle2, Shield, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, CheckCircle2, Shield, ShieldAlert, AlertTriangle, Bookmark } from 'lucide-react';
 
 const CheckCircle = ({ size, className }: { size: number; className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -31,6 +31,9 @@ export default function ExamPortal() {
 
   // Single-question navigation
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Bookmark / Flag for review state
+  const [bookmarks, setBookmarks] = useState<Record<string, boolean>>({});
 
   // Anti-Cheat & Screen Protection state
   const [isScreenBlurred, setIsScreenBlurred] = useState(false);
@@ -177,11 +180,30 @@ export default function ExamPortal() {
     const { data } = await supabase.from('attempts').select('*').eq('id', attemptId).single();
     if (data) {
       setAttempt(data);
+      const savedBookmarks = localStorage.getItem(`bookmarks_${attemptId}`);
+      if (savedBookmarks) {
+        try {
+          setBookmarks(JSON.parse(savedBookmarks));
+        } catch (_) {}
+      }
       if (data.status === 'in_progress') await loadQuestions(attemptId);
     } else {
       localStorage.removeItem(`attempt_${examId}`);
     }
     setLoading(false);
+  };
+
+  const toggleBookmark = (questionId: string) => {
+    setBookmarks(prev => {
+      const next = { ...prev, [questionId]: !prev[questionId] };
+      if (!next[questionId]) {
+        delete next[questionId];
+      }
+      if (attempt?.id) {
+        localStorage.setItem(`bookmarks_${attempt.id}`, JSON.stringify(next));
+      }
+      return next;
+    });
   };
 
   // ─── Validation ─────────────────────────────────────────────────────────────
@@ -217,6 +239,8 @@ export default function ExamPortal() {
       if (!data.success) throw new Error(data.error);
       setAttempt(data.attempt);
       localStorage.setItem(`attempt_${examId}`, data.attempt.id);
+      localStorage.removeItem(`bookmarks_${data.attempt.id}`);
+      setBookmarks({});
       await loadQuestions(data.attempt.id);
     } catch (err: any) {
       setError(err.message || 'فشل بدء الامتحان');
@@ -434,6 +458,7 @@ export default function ExamPortal() {
   // ─── Exam Page (single question view) ────────────────────────────────────────
   const currentQuestion = questions[currentIndex];
   const answeredCount = Object.keys(answers).length;
+  const bookmarkedCount = Object.keys(bookmarks).length;
   const totalQuestions = questions.length;
 
   return (
@@ -542,32 +567,93 @@ export default function ExamPortal() {
       {/* Question navigator dots */}
       <div className="bg-white border-b border-gray-100 py-3 px-4 overflow-x-auto">
         <div className="flex gap-1.5 max-w-3xl mx-auto justify-center flex-wrap">
-          {questions.map((q, i) => (
-            <button
-              key={q.id}
-              onClick={() => setCurrentIndex(i)}
-              className={`w-8 h-8 rounded-full text-xs font-bold transition-all border-2 ${
-                i === currentIndex
-                  ? 'bg-blue-600 text-white border-blue-600 scale-110'
-                  : answers[q.id]
-                  ? 'bg-green-500 text-white border-green-500'
-                  : 'bg-white text-gray-500 border-gray-300 hover:border-blue-400'
-              }`}
-              title={`Question ${i + 1}`}
-            >
-              {i + 1}
-            </button>
-          ))}
+          {questions.map((q, i) => {
+            const isCurrent = i === currentIndex;
+            const isAnswered = !!answers[q.id];
+            const isBookmarked = !!bookmarks[q.id];
+            return (
+              <button
+                key={q.id}
+                onClick={() => setCurrentIndex(i)}
+                className={`relative w-8 h-8 rounded-full text-xs font-bold transition-all border-2 flex items-center justify-center ${
+                  isCurrent
+                    ? 'bg-blue-600 text-white border-blue-600 scale-110 shadow-sm'
+                    : isBookmarked
+                    ? 'bg-amber-500 text-white border-amber-600 ring-2 ring-amber-200'
+                    : isAnswered
+                    ? 'bg-green-500 text-white border-green-500'
+                    : 'bg-white text-gray-500 border-gray-300 hover:border-blue-400'
+                }`}
+                title={`Question ${i + 1}${isBookmarked ? ' • Bookmarked (مراجعة لاحقاً)' : ''}${isAnswered ? ' • Answered (تمت الإجابة)' : ''}`}
+              >
+                {i + 1}
+                {isBookmarked && isCurrent && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-amber-300 rounded-full border border-white" />
+                )}
+                {isBookmarked && isAnswered && !isCurrent && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-300 rounded-full border border-white" />
+                )}
+              </button>
+            );
+          })}
         </div>
-        <p className="text-center text-xs text-gray-400 mt-2">
-          Answered {answeredCount} of {totalQuestions} questions
-        </p>
+        <div className="flex items-center justify-center gap-4 text-xs text-gray-500 mt-2.5 flex-wrap">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+            <span>Answered: <strong>{answeredCount}</strong></span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+            <span>Bookmarked: <strong>{bookmarkedCount}</strong></span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-gray-300 border border-gray-400" />
+            <span>Remaining: <strong>{Math.max(0, totalQuestions - answeredCount)}</strong></span>
+          </span>
+        </div>
       </div>
 
       {/* Main question area */}
       <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 py-6">
         {currentQuestion && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex-1">
+            {/* Question card top bar: Question counter & Bookmark toggle */}
+            <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
+                  Question {currentIndex + 1} of {totalQuestions}
+                </span>
+                {answers[currentQuestion.id] && (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <CheckCircle2 size={12} />
+                    Answered
+                  </span>
+                )}
+              </div>
+
+              {/* Bookmark Toggle Button */}
+              <button
+                type="button"
+                onClick={() => toggleBookmark(currentQuestion.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                  bookmarks[currentQuestion.id]
+                    ? 'bg-amber-500 text-white border-amber-600 shadow-xs hover:bg-amber-600'
+                    : 'bg-white text-gray-700 border-gray-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300'
+                }`}
+                title={bookmarks[currentQuestion.id] ? 'Remove bookmark' : 'Bookmark question for review'}
+              >
+                <Bookmark
+                  size={14}
+                  className={bookmarks[currentQuestion.id] ? 'fill-white text-white' : 'text-amber-500'}
+                />
+                <span>
+                  {bookmarks[currentQuestion.id]
+                    ? 'Bookmarked / علامة مرجعية'
+                    : 'Bookmark / علامة مرجعية'}
+                </span>
+              </button>
+            </div>
+
             {/* Question header */}
             <div className="flex items-start gap-3.5 mb-6">
               <span className="shrink-0 w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-sm mt-1">
