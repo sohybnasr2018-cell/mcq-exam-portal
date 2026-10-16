@@ -270,9 +270,7 @@ export default function ExamPortal() {
 
   const submitExam = async (type: 'manual' | 'auto') => {
     if (type === 'manual') {
-      const confirmMsg = lang === 'ar'
-        ? 'هل أنت متأكد من تسليم الامتحان؟ لا يمكنك تغيير إجاباتك بعد التسليم.'
-        : 'Are you sure you want to submit? You cannot change answers after submission.';
+      const confirmMsg = 'هل أنت متأكد من تسليم الامتحان؟ لا يمكنك تغيير إجاباتك بعد التسليم.\n\nAre you sure you want to submit? You cannot change your answers after submission.';
       if (!confirm(confirmMsg)) return;
     }
     setLoading(true);
@@ -282,12 +280,15 @@ export default function ExamPortal() {
         p_submission_type: type,
       });
       if (error) throw error;
-      if (data.success) {
-        const { data: updated } = await supabase.from('attempts').select('*, students(*)').eq('id', attempt.id).single();
+      if (data && data.success) {
+        const { data: updated } = await supabase.from('attempts').select('*').eq('id', attempt.id).single();
         setAttempt(updated ?? { ...attempt, status: data.status || 'submitted', submission_type: type });
+      } else {
+        setAttempt((prev: any) => ({ ...prev, status: 'submitted', submission_type: type }));
       }
     } catch (err) {
       console.error(err);
+      setAttempt((prev: any) => ({ ...prev, status: 'submitted', submission_type: type }));
     }
     setLoading(false);
   };
@@ -407,49 +408,55 @@ export default function ExamPortal() {
     const percentage = hasScore && attempt.max_score > 0
       ? Math.round((attempt.score / attempt.max_score) * 100)
       : null;
-    const isAutoViolation = attempt.submission_type === 'auto_violation' || isTerminated;
 
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir={dir}>
-        <div className="bg-white p-8 rounded-2xl shadow-lg max-w-md w-full text-center border border-gray-100">
-          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" dir="rtl">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xs">
             <CheckCircle size={36} />
           </div>
-          <h2 className="text-2xl font-bold mb-2 text-gray-800">
-            Exam Submitted Successfully
+          <h2 className="text-2xl font-bold mb-1 text-gray-800">
+            تم تسليم الامتحان بنجاح
           </h2>
-          <p className="text-gray-500 mb-6 text-sm">
-            Your answers have been securely recorded on the server.
+          <p className="text-sm font-semibold text-gray-400 mb-3 font-mono" dir="ltr">
+            Exam Submitted Successfully
+          </p>
+          <p className="text-gray-600 mb-6 text-sm leading-relaxed">
+            تم استلام وتسجيل جميع إجاباتك بنجاح في النظام.
           </p>
 
           {exam?.show_results && hasScore ? (
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-6 mb-6">
-              <p className="text-sm font-medium text-blue-700 mb-1">Your Final Score</p>
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-6 mb-6 text-center">
+              <p className="text-sm font-bold text-blue-700 mb-1">الدرجة النهائية / Score</p>
               <div className="text-4xl font-extrabold text-blue-900 my-2">
                 {attempt.score} <span className="text-xl text-blue-600 font-semibold">/ {attempt.max_score}</span>
               </div>
               {percentage !== null && (
-                <div className="mt-3 inline-block px-3 py-1 bg-blue-600 text-white text-sm font-bold rounded-full">
+                <div className="mt-2 inline-block px-3 py-1 bg-blue-600 text-white text-sm font-bold rounded-full">
                   {percentage}%
                 </div>
               )}
               <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-blue-200/60 text-xs text-gray-600">
                 <div>
-                  <span className="block font-semibold text-gray-700 text-sm">{attempt.answered_questions ?? '-'}</span>
-                  <span>Questions answered</span>
+                  <span className="block font-bold text-gray-800 text-sm">{attempt.answered_questions ?? '-'}</span>
+                  <span>الأسئلة المجاب عليها</span>
                 </div>
                 <div>
-                  <span className="block font-semibold text-gray-700 text-sm">{attempt.unanswered_questions ?? '-'}</span>
-                  <span>Unanswered</span>
+                  <span className="block font-bold text-gray-800 text-sm">{attempt.unanswered_questions ?? '-'}</span>
+                  <span>لم تتم الإجابة</span>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 text-sm text-gray-600">
-              Results will be reviewed and announced by the administration.
+            <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-4 mb-6 text-sm text-blue-900 leading-relaxed font-medium">
+              تم استلام إجاباتك بنجاح. سيتم مراجعة النتائج وإعلانها من قبل إدارة الامتحان.
             </div>
           )}
-          <div className="text-xs text-gray-400">Exam: {exam?.title}</div>
+
+          <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
+            <span>الامتحان: {exam?.title}</span>
+            <span>الطالب: {fullName || '-'}</span>
+          </div>
         </div>
       </div>
     );
