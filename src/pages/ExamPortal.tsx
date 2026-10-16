@@ -338,12 +338,21 @@ export default function ExamPortal() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col" dir={dir}>
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center gap-3">
+      <header className="bg-white shadow-sm sticky top-0 z-20">
+        <div className="w-full px-4 md:px-8 py-3 flex justify-between items-center gap-4">
           <h1 className="font-bold text-lg text-gray-800 truncate flex-1">{exam?.title}</h1>
-          <div className={`flex items-center gap-2 font-mono text-base font-bold px-3 py-1.5 rounded-lg ${timeLeft !== null && timeLeft < 300 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
-            <Clock size={16} />
-            <span>{timeLeft !== null ? formatTime(timeLeft) : '--:--'}</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className={`flex items-center gap-2 font-mono text-base font-bold px-3 py-1.5 rounded-lg ${timeLeft !== null && timeLeft < 300 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+              <Clock size={16} />
+              <span>{timeLeft !== null ? formatTime(timeLeft) : '--:--'}</span>
+            </div>
+            <button
+              onClick={() => submitExam('manual')}
+              disabled={loading}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm transition shadow-sm disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <span>{loading ? 'Submitting...' : 'Submit Exam'}</span>
+            </button>
           </div>
         </div>
 
@@ -436,26 +445,21 @@ export default function ExamPortal() {
           <button
             onClick={() => setCurrentIndex(i => Math.max(0, i - 1))}
             disabled={currentIndex === 0}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-gray-200 text-gray-600 font-semibold rounded-xl hover:border-blue-400 hover:text-blue-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-2.5 bg-white border-2 border-gray-200 text-gray-600 font-semibold rounded-xl hover:border-blue-400 hover:text-blue-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ChevronLeft size={20} />
             Previous
           </button>
 
-          {/* Submit button */}
-          <button
-            onClick={() => submitExam('manual')}
-            disabled={loading}
-            className="flex-1 bg-green-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-green-700 transition disabled:opacity-50 text-center"
-          >
-            {loading ? 'Submitting...' : currentIndex === totalQuestions - 1 ? '✓ Submit Exam' : 'Submit Exam'}
-          </button>
+          <span className="text-sm text-gray-400 font-medium">
+            Question {currentIndex + 1} of {totalQuestions}
+          </span>
 
           {/* Next */}
           <button
             onClick={() => setCurrentIndex(i => Math.min(totalQuestions - 1, i + 1))}
             disabled={currentIndex === totalQuestions - 1}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
           >
             Next
             <ChevronRight size={20} />
