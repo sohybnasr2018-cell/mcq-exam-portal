@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { Clock, ChevronLeft, ChevronRight, CheckCircle2, Bookmark } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, CheckCircle2, Bookmark, BookOpen, XCircle, AlertCircle, RefreshCw, X, Filter } from 'lucide-react';
 
 const CheckCircle = ({ size, className }: { size: number; className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -34,6 +34,12 @@ export default function ExamPortal() {
 
   // Bookmark / Flag for review state
   const [bookmarks, setBookmarks] = useState<Record<string, boolean>>({});
+
+  // Student Review state
+  const [reviewQuestions, setReviewQuestions] = useState<any[]>([]);
+  const [loadingReview, setLoadingReview] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState<'all' | 'mistakes' | 'correct'>('all');
 
   useEffect(() => {
     loadExam();
@@ -118,25 +124,44 @@ export default function ExamPortal() {
     };
   }, [attempt?.status]);
 
-  // Timer
+  // Timer with clock mismatch protection & local interval countdown
   useEffect(() => {
     let interval: any;
     if (attempt && attempt.status === 'in_progress' && attempt.deadline_at) {
+      const now = Date.now();
+      const deadline = new Date(attempt.deadline_at).getTime();
+      const started = attempt.started_at ? new Date(attempt.started_at).getTime() : now;
+      const elapsedSeconds = Math.max(0, Math.floor((now - started) / 1000));
+      const totalDurationSeconds = (exam?.duration_minutes || 60) * 60;
+      
+      let initialDiff = Math.floor((deadline - now) / 1000);
+
+      // Protection against device clock mismatch:
+      // If student clock is ahead and diff is 0 or negative while attempt just started:
+      if (initialDiff <= 0 && elapsedSeconds < totalDurationSeconds) {
+        initialDiff = Math.max(10, totalDurationSeconds - elapsedSeconds);
+      } else if (initialDiff > totalDurationSeconds + 60) {
+        // If student clock is behind
+        initialDiff = Math.max(10, totalDurationSeconds - elapsedSeconds);
+      }
+
+      setTimeLeft(initialDiff);
+
+      // Independent tick-down interval
       interval = setInterval(() => {
-        const now = new Date().getTime();
-        const deadline = new Date(attempt.deadline_at).getTime();
-        const diff = Math.floor((deadline - now) / 1000);
-        if (diff <= 0) {
-          clearInterval(interval);
-          setTimeLeft(0);
-          submitExam('auto');
-        } else {
-          setTimeLeft(diff);
-        }
+        setTimeLeft((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(interval);
+            submitExam('auto');
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [attempt]);
+  }, [attempt?.id, attempt?.status]);
 
   const loadExam = async () => {
     const { data } = await supabase.from('exams').select('*').eq('id', examId).eq('is_published', true).single();
@@ -155,15 +180,10 @@ export default function ExamPortal() {
   };
 
   const resumeAttempt = async (attemptId: string) => {
-    const { data } = await supabase.from('attempts').select('*, students(*)').eq('id', attemptId).single();
-    if (data) {
-      setAttempt(data);
-      if (data.violations) setViolationsCount(data.violations);
-      if (data.students) {
-        setFullName(data.students.full_name || '');
-        setUniCode(data.students.university_code || '');
-        setPhone(data.students.phone_number || '');
-      } else {
+    try {
+      const { data } = await supabase.from('attempts').select('*').eq('id', attemptId).single();
+      if (data) {
+        setAttempt(data);
         const savedInfo = localStorage.getItem('student_info');
         if (savedInfo) {
           try {
@@ -173,90 +193,110 @@ export default function ExamPortal() {
             if (parsed.phone) setPhone(parsed.phone);
           } catch (_) {}
         }
+        const savedBookmarks = localStorage.getItem(`bookmarks_${attemptId}`);
+        if (savedBookmarks) {
+          try {
+            setBookmarks(JSON.parse(savedBookmarks));
+          } catch (_) {}
+        }
+        if (data.status === 'in_progress') {
+          await loadQuestions(attemptId);
+        }
+      } else {
+        localStorage.removeItem(`attempt_${examId}`);
       }
-      const savedBookmarks = localStorage.getItem(`bookmarks_${attemptId}`);
-      if (savedBookmarks) {
-        try {
-          setBookmarks(JSON.parse(savedBookmarks));
-        } catch (_) {}
-      }
-      if (data.status === 'in_progress') await loadQuestions(attemptId);
-    } else {
-      localStorage.removeItem(`attempt_${examId}`);
-    }
-    setLoading(false);
-  };
-
-  const toggleBookmark = (questionId: string) => {
-    setBookmarks(prev => {
-      const next = { ...prev, [questionId]: !prev[questionId] };
-      if (!next[questionId]) {
-        delete next[questionId];
-      }
-      if (attempt?.id) {
-        localStorage.setItem(`bookmarks_${attempt.id}`, JSON.stringify(next));
-      }
-      return next;
-    });
-  };
-
-  // ─── Validation ─────────────────────────────────────────────────────────────
-  const validateForm = (): boolean => {
-    const errors: { uniCode?: string; phone?: string } = {};
-    const uniCodeDigits = uniCode.replace(/\D/g, '');
-    const phoneDigits = phone.replace(/\D/g, '');
-
-    if (uniCodeDigits.length !== 9) {
-      errors.uniCode = 'University code must be exactly 9 digits';
-    }
-    if (phoneDigits.length !== 11) {
-      errors.phone = 'WhatsApp number must be exactly 11 digits';
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleStart = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-
-    setLoading(true);
-    setError('');
-    try {
-      const { data, error } = await supabase.rpc('start_exam', {
-        p_exam_id: examId,
-        p_full_name: fullName,
-        p_university_code: uniCode,
-        p_phone_number: phone,
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-      setAttempt(data.attempt);
-      localStorage.setItem(`attempt_${examId}`, data.attempt.id);
-      localStorage.setItem('student_info', JSON.stringify({ fullName, uniCode, phone }));
-      localStorage.removeItem(`bookmarks_${data.attempt.id}`);
-      setBookmarks({});
-      await loadQuestions(data.attempt.id);
-    } catch (err: any) {
-      setError(err.message || 'فشل بدء الامتحان');
+    } catch (err) {
+      console.error('Failed to resume attempt', err);
     }
     setLoading(false);
   };
 
   const loadQuestions = async (attemptId: string) => {
-    const { data: qData } = await supabase
-      .from('questions')
-      .select('*, options(*)')
-      .eq('exam_id', examId)
-      .order('order_num');
-    if (qData) setQuestions(qData);
-
-    const { data: aData } = await supabase.from('answers').select('*').eq('attempt_id', attemptId);
-    if (aData) {
-      const ansMap: Record<string, string> = {};
-      aData.forEach((a) => { ansMap[a.question_id] = a.selected_option_id; });
-      setAnswers(ansMap);
+    // 1. Check local cache first so questions display immediately
+    const cached = localStorage.getItem(`cached_questions_${examId}`);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setQuestions(parsed);
+        }
+      } catch (_) {}
     }
+
+    try {
+      const { data: qData } = await supabase
+        .from('questions')
+        .select('*, options(*)')
+        .eq('exam_id', examId)
+        .order('order_num');
+      if (qData && qData.length > 0) {
+        setQuestions(qData);
+        localStorage.setItem(`cached_questions_${examId}`, JSON.stringify(qData));
+      }
+    } catch (err) {
+      console.error('Failed to fetch questions from network', err);
+    }
+
+    try {
+      const { data: aData } = await supabase.from('answers').select('*').eq('attempt_id', attemptId);
+      if (aData) {
+        const ansMap: Record<string, string> = {};
+        aData.forEach((a) => { ansMap[a.question_id] = a.selected_option_id; });
+        setAnswers(ansMap);
+      }
+    } catch (err) {
+      console.error('Failed to load saved answers', err);
+    }
+  };
+
+  const loadReviewData = async () => {
+    if (!attempt?.id) return;
+    setLoadingReview(true);
+    try {
+      // 1. Try secure RPC function (checks show_answers on server)
+      const { data, error } = await supabase.rpc('get_student_exam_review', {
+        p_attempt_id: attempt.id
+      });
+      if (!error && data && data.success && Array.isArray(data.questions)) {
+        setReviewQuestions(data.questions);
+        setLoadingReview(false);
+        return;
+      }
+    } catch (_) {}
+
+    // 2. Fallback if RPC function is not yet created
+    try {
+      const { data: qData } = await supabase
+        .from('questions')
+        .select('*, options(*)')
+        .eq('exam_id', examId)
+        .order('order_num');
+
+      const { data: aData } = await supabase
+        .from('answers')
+        .select('*')
+        .eq('attempt_id', attempt.id);
+
+      const aMap: Record<string, string> = {};
+      if (aData) {
+        aData.forEach((a: any) => { aMap[a.question_id] = a.selected_option_id; });
+      }
+
+      if (qData) {
+        const formatted = qData.map((q: any) => ({
+          id: q.id,
+          text: q.text,
+          marks: q.marks,
+          order_num: q.order_num,
+          selected_option_id: aMap[q.id] || null,
+          options: q.options || []
+        }));
+        setReviewQuestions(formatted);
+      }
+    } catch (e) {
+      console.error('Failed to load review', e);
+    }
+    setLoadingReview(false);
   };
 
   const handleAnswerSelect = async (questionId: string, optionId: string) => {
@@ -453,11 +493,250 @@ export default function ExamPortal() {
             </div>
           )}
 
+          {/* Student Exam Review Feature */}
+          {exam?.show_answers && (
+            <div className="mb-6 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  loadReviewData();
+                  setShowReviewModal(true);
+                }}
+                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm"
+              >
+                <BookOpen size={18} />
+                <span>مراجعة ورقة الامتحان وأخطائي (Review Exam)</span>
+              </button>
+              <p className="text-[11px] text-gray-400 mt-2">
+                متاح الآن: يمكنك استعراض أسئلتك، إجاباتك، والإجابات النموذجية.
+              </p>
+            </div>
+          )}
+
           <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
             <span>الامتحان: {exam?.title}</span>
             <span>الطالب: {fullName || '-'}</span>
           </div>
         </div>
+
+        {/* Full Exam Review Modal */}
+        {showReviewModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200" dir="rtl">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-gray-200 text-right">
+              {/* Modal Header */}
+              <div className="p-4 sm:p-5 border-b border-gray-100 bg-slate-50 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                    <BookOpen size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base sm:text-lg text-gray-800">
+                      مراجعة ورقة الامتحان: {exam?.title}
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      الطالب: {fullName || '-'} {attempt.score !== null && `| النتيجة: ${attempt.score} / ${attempt.max_score}`}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-xl transition"
+                  title="إغلاق"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Filter Tabs */}
+              <div className="px-4 py-2.5 bg-white border-b border-gray-100 flex items-center gap-2 flex-wrap text-xs font-bold">
+                <span className="text-gray-400 ml-1">عرض:</span>
+                <button
+                  type="button"
+                  onClick={() => setReviewFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg transition ${
+                    reviewFilter === 'all'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  جميع الأسئلة ({reviewQuestions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewFilter('mistakes')}
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1 ${
+                    reviewFilter === 'mistakes'
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
+                  }`}
+                >
+                  <XCircle size={13} />
+                  <span>الأسئلة الخاطئة ({reviewQuestions.filter(q => q.is_correct === false || (!q.selected_option_id && q.correct_option_id)).length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewFilter('correct')}
+                  className={`px-3 py-1.5 rounded-lg transition flex items-center gap-1 ${
+                    reviewFilter === 'correct'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                  }`}
+                >
+                  <CheckCircle2 size={13} />
+                  <span>الإجابات الصحيحة ({reviewQuestions.filter(q => q.is_correct === true).length})</span>
+                </button>
+              </div>
+
+              {/* Questions List */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/50">
+                {loadingReview ? (
+                  <div className="py-12 text-center text-gray-500 font-semibold text-sm flex flex-col items-center justify-center gap-2">
+                    <RefreshCw size={24} className="animate-spin text-purple-600" />
+                    <span>جاري تحميل ورقة الإجابات النموذجية...</span>
+                  </div>
+                ) : reviewQuestions.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 text-sm">
+                    لا توجد أسئلة متوفرة للمراجعة حالياً.
+                  </div>
+                ) : (
+                  reviewQuestions
+                    .filter(q => {
+                      if (reviewFilter === 'mistakes') return q.is_correct === false || (!q.selected_option_id && q.correct_option_id);
+                      if (reviewFilter === 'correct') return q.is_correct === true;
+                      return true;
+                    })
+                    .map((q, idx) => {
+                      const hasCorrectKey = q.correct_option_id !== undefined && q.correct_option_id !== null;
+                      const isStudentCorrect = q.is_correct === true;
+                      const isUnanswered = !q.selected_option_id;
+
+                      return (
+                        <div
+                          key={q.id}
+                          className={`bg-white rounded-xl p-5 border-2 shadow-xs transition-all ${
+                            !hasCorrectKey
+                              ? 'border-gray-200'
+                              : isStudentCorrect
+                              ? 'border-emerald-300'
+                              : 'border-red-300'
+                          }`}
+                        >
+                          {/* Question Header */}
+                          <div className="flex items-start justify-between gap-3 mb-3 pb-2 border-b border-gray-100 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="w-7 h-7 bg-slate-800 text-white text-xs font-bold rounded-lg flex items-center justify-center shrink-0">
+                                {q.order_num !== undefined ? q.order_num + 1 : idx + 1}
+                              </span>
+                              <span className="text-xs text-gray-400 font-semibold">
+                                ({q.marks ?? 1} درجة)
+                              </span>
+                            </div>
+                            <div>
+                              {hasCorrectKey ? (
+                                isStudentCorrect ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-bold">
+                                    <CheckCircle2 size={13} />
+                                    <span>إجابة صحيحة (+{q.marks ?? 1})</span>
+                                  </span>
+                                ) : isUnanswered ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-600 border border-gray-300 rounded-full text-xs font-bold">
+                                    <AlertCircle size={13} />
+                                    <span>لم تتم الإجابة (0)</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 border border-red-200 rounded-full text-xs font-bold">
+                                    <XCircle size={13} />
+                                    <span>إجابة خاطئة (0)</span>
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-xs text-gray-400">سؤال {idx + 1}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Question Text */}
+                          <p className="text-gray-900 font-semibold text-base mb-4 leading-relaxed">
+                            {q.text}
+                          </p>
+
+                          {/* Options */}
+                          <div className="space-y-2.5">
+                            {q.options?.map((opt: any) => {
+                              const isStudentPick = q.selected_option_id === opt.id;
+                              const isCorrectOpt = q.correct_option_id === opt.id;
+
+                              let optStyle = 'border-gray-200 bg-white text-gray-700';
+                              let badge = null;
+
+                              if (hasCorrectKey) {
+                                if (isCorrectOpt && isStudentPick) {
+                                  optStyle = 'border-emerald-500 bg-emerald-50/80 text-emerald-950 font-semibold';
+                                  badge = (
+                                    <span className="mr-auto inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                                      <CheckCircle2 size={12} />
+                                      <span>إجابتك (صحيحة) ✔️</span>
+                                    </span>
+                                  );
+                                } else if (isCorrectOpt && !isStudentPick) {
+                                  optStyle = 'border-emerald-500 bg-emerald-50/50 text-emerald-900 font-semibold';
+                                  badge = (
+                                    <span className="mr-auto inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                                      <CheckCircle2 size={12} />
+                                      <span>الإجابة النموذجية الصحيحة ✔️</span>
+                                    </span>
+                                  );
+                                } else if (isStudentPick && !isCorrectOpt) {
+                                  optStyle = 'border-red-400 bg-red-50/70 text-red-950 font-semibold';
+                                  badge = (
+                                    <span className="mr-auto inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-md">
+                                      <XCircle size={12} />
+                                      <span>إجابتك (خاطئة) ❌</span>
+                                    </span>
+                                  );
+                                }
+                              } else if (isStudentPick) {
+                                optStyle = 'border-blue-400 bg-blue-50 text-blue-900 font-semibold';
+                                badge = <span className="mr-auto text-[11px] font-bold text-blue-700">إجابتك المسجلة</span>;
+                              }
+
+                              return (
+                                <div
+                                  key={opt.id}
+                                  className={`flex items-center gap-3 p-3.5 border-2 rounded-xl text-sm transition-all ${optStyle}`}
+                                >
+                                  <span className="shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold">
+                                    {isCorrectOpt ? '✓' : isStudentPick ? '✕' : '•'}
+                                  </span>
+                                  <span className="flex-1">{opt.text}</span>
+                                  {badge}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-gray-100 bg-white flex items-center justify-between">
+                <span className="text-xs text-gray-400">
+                  مراجعة الأخطاء والإجابات النموذجية
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowReviewModal(false)}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition"
+                >
+                  إغلاق المراجعة
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -555,7 +834,27 @@ export default function ExamPortal() {
 
       {/* Main question area */}
       <main className="flex-1 flex flex-col max-w-3xl w-full mx-auto px-4 py-6">
-        {currentQuestion && (
+        {totalQuestions === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center my-auto">
+            <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto mb-3">
+              <RefreshCw size={24} className="animate-spin text-amber-600" />
+            </div>
+            <h3 className="text-base font-bold text-gray-800 mb-1">
+              جاري تحميل أسئلة الامتحان...
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              إذا استمر هذا لبضع ثوانٍ بسبب ضعف الاتصال، اضغط أدناه لتحميل الأسئلة فوراً:
+            </p>
+            <button
+              type="button"
+              onClick={() => attempt?.id && loadQuestions(attempt.id)}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md transition inline-flex items-center gap-2"
+            >
+              <RefreshCw size={14} />
+              <span>إعادة تحميل الأسئلة الآن (Reload Questions)</span>
+            </button>
+          </div>
+        ) : currentQuestion ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex-1">
             {/* Question card top bar: Question counter & Bookmark toggle */}
             <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100 flex-wrap">
@@ -637,7 +936,7 @@ export default function ExamPortal() {
               })}
             </div>
           </div>
-        )}
+        ) : null}
 
         {/* Navigation buttons */}
         <div className="flex items-center justify-between mt-5 gap-3">

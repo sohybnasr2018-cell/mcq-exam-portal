@@ -13,6 +13,7 @@ export default function ExamEditor() {
   const [instructions, setInstructions] = useState('');
   const [duration, setDuration] = useState(60);
   const [showResults, setShowResults] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function ExamEditor() {
       setInstructions(data.instructions || '');
       setDuration(data.duration_minutes);
       setShowResults(data.show_results ?? false);
+      setShowAnswers(data.show_answers ?? false);
     }
   };
 
@@ -35,11 +37,12 @@ export default function ExamEditor() {
     e.preventDefault();
     setSaving(true);
     
-    const examData = {
+    const examData: any = {
       title,
       instructions,
       duration_minutes: duration,
-      show_results: showResults
+      show_results: showResults,
+      show_answers: showAnswers
     };
 
     let examId = id;
@@ -121,6 +124,23 @@ export default function ExamEditor() {
           </label>
           <p className="text-xs text-gray-500 mt-1 mr-8 ml-8">
             عند التفعيل، سيرى الطالب درجته النهائية والنسبة المئوية فور انتهاء الامتحان. إذا تم التعطيل، ستظهر رسالة تم التسليم فقط.
+          </p>
+        </div>
+
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <label className="flex items-center space-x-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+              checked={showAnswers}
+              onChange={(e) => setShowAnswers(e.target.checked)}
+            />
+            <span className="text-sm font-semibold text-purple-950">
+              السماح للطالب بمراجعة أسئلة الامتحان كاملة وإجاباته وأخطائه (Show Full Exam & Review to Student)
+            </span>
+          </label>
+          <p className="text-xs text-purple-700 mt-1 mr-8 ml-8">
+            (خيار منفصل عن النتيجة): عند التفعيل، يظهر زر للطالب بعد تسليم الامتحان يمكنه من فتح ورقة امتحانه كاملة ومراجعة كل سؤال، الإجابة التي اختارها، وتحديد أخطائه مع الإجابات النموذجية.
           </p>
         </div>
 

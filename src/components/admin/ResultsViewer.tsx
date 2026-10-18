@@ -27,10 +27,24 @@ export default function ResultsViewer() {
   }, [selectedExam]);
 
   const loadExams = async () => {
-    const { data } = await supabase.from('exams').select('id, title').order('created_at', { ascending: false });
+    const { data } = await supabase.from('exams').select('id, title, show_results, show_answers').order('created_at', { ascending: false });
     if (data) {
       setExams(data);
       if (data.length > 0) setSelectedExam(data[0].id);
+    }
+  };
+
+  const currentExam = exams.find(e => e.id === selectedExam);
+
+  const toggleStudentReview = async () => {
+    if (!currentExam) return;
+    const newStatus = !currentExam.show_answers;
+    try {
+      const { error } = await supabase.from('exams').update({ show_answers: newStatus }).eq('id', selectedExam);
+      if (error) throw error;
+      setExams(prev => prev.map(e => e.id === selectedExam ? { ...e, show_answers: newStatus } : e));
+    } catch (err: any) {
+      alert('تعذر تحديث إعداد المراجعة: ' + err.message);
     }
   };
 
@@ -180,18 +194,39 @@ export default function ResultsViewer() {
         </button>
       </div>
 
-      <div className="mb-6 bg-white p-4 rounded-lg shadow-sm flex items-center space-x-4">
-        <label className="font-medium text-gray-700">Select Exam:</label>
-        <select
-          className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 min-w-[200px]"
-          value={selectedExam}
-          onChange={(e) => setSelectedExam(e.target.value)}
-        >
-          <option value="" disabled>Select an exam</option>
-          {exams.map(ex => (
-            <option key={ex.id} value={ex.id}>{ex.title}</option>
-          ))}
-        </select>
+      <div className="mb-6 bg-white p-4 rounded-lg shadow-sm flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center space-x-4">
+          <label className="font-medium text-gray-700">Select Exam:</label>
+          <select
+            className="p-2 border border-gray-300 rounded-md focus:ring-blue-500 min-w-[200px]"
+            value={selectedExam}
+            onChange={(e) => setSelectedExam(e.target.value)}
+          >
+            <option value="" disabled>Select an exam</option>
+            {exams.map(ex => (
+              <option key={ex.id} value={ex.id}>{ex.title}</option>
+            ))}
+          </select>
+        </div>
+
+        {selectedExam && currentExam && (
+          <div className="flex items-center gap-3 bg-purple-50 border border-purple-200 px-4 py-2 rounded-xl">
+            <span className="text-xs font-bold text-purple-900">
+              إتاحة مراجعة الأسئلة والإجابات للطلاب:
+            </span>
+            <button
+              type="button"
+              onClick={toggleStudentReview}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1.5 ${
+                currentExam.show_answers
+                  ? 'bg-purple-600 text-white hover:bg-purple-700'
+                  : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <span>{currentExam.show_answers ? '🟢 مراجعة الامتحان مفعّلة للطلاب' : '⚪ مراجعة الامتحان معطلة (مخفية)'}</span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow-sm overflow-hidden overflow-x-auto">
