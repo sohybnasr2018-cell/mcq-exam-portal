@@ -4,6 +4,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import ExamPortal from './pages/ExamPortal';
 import AdminLogin from './pages/AdminLogin';
 import SetupGuide from './pages/SetupGuide';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   if (!isSupabaseConfigured) {
@@ -11,14 +12,16 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route path="/admin/*" element={<AdminDashboard />} />
-        <Route path="/exam/:examId" element={<ExamPortal />} />
-        <Route path="/" element={<Navigate to="/admin/login" replace />} />
-      </Routes>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <Routes>
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/*" element={<AdminDashboard />} />
+          <Route path="/exam/:examId" element={<ExamPortal />} />
+          <Route path="/" element={<Navigate to="/admin/login" replace />} />
+        </Routes>
+      </Router>
+    </ErrorBoundary>
   );
 }
 

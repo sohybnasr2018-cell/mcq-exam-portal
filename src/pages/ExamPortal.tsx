@@ -164,8 +164,13 @@ export default function ExamPortal() {
   }, [attempt?.id, attempt?.status]);
 
   const loadExam = async () => {
-    const { data } = await supabase.from('exams').select('*').eq('id', examId).eq('is_published', true).single();
-    if (data) {
+    try {
+      const { data, error } = await supabase.from('exams').select('*').eq('id', examId).eq('is_published', true).single();
+      if (error || !data) {
+        setError('الامتحان غير موجود أو غير متاح حالياً.');
+        setLoading(false);
+        return;
+      }
       setExam(data);
       const savedAttempt = localStorage.getItem(`attempt_${examId}`);
       if (savedAttempt) {
@@ -173,8 +178,9 @@ export default function ExamPortal() {
       } else {
         setLoading(false);
       }
-    } else {
-      setError('الامتحان غير موجود أو غير متاح حالياً.');
+    } catch (err: any) {
+      console.error('Failed to load exam', err);
+      setError('تعذر تحميل بيانات الامتحان. يرجى التأكد من اتصالك بالإنترنت والضغط على إعادة المحاولة.');
       setLoading(false);
     }
   };
@@ -207,6 +213,62 @@ export default function ExamPortal() {
       }
     } catch (err) {
       console.error('Failed to resume attempt', err);
+    }
+    setLoading(false);
+  };
+
+  const toggleBookmark = (questionId: string) => {
+    setBookmarks((prev) => {
+      const next = { ...prev, [questionId]: !prev[questionId] };
+      if (!next[questionId]) {
+        delete next[questionId];
+      }
+      if (attempt?.id) {
+        localStorage.setItem(`bookmarks_${attempt.id}`, JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  // ─── Registration Form Validation ──────────────────────────────────────────
+  const validateForm = (): boolean => {
+    const errors: { uniCode?: string; phone?: string } = {};
+    const uniCodeDigits = uniCode.replace(/\D/g, '');
+    const phoneDigits = phone.replace(/\D/g, '');
+
+    if (uniCodeDigits.length !== 9) {
+      errors.uniCode = 'University code must be exactly 9 digits';
+    }
+    if (phoneDigits.length !== 11) {
+      errors.phone = 'WhatsApp number must be exactly 11 digits';
+    }
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleStart = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setLoading(true);
+    setError('');
+    try {
+      const { data, error } = await supabase.rpc('start_exam', {
+        p_exam_id: examId,
+        p_full_name: fullName,
+        p_university_code: uniCode,
+        p_phone_number: phone,
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      setAttempt(data.attempt);
+      localStorage.setItem(`attempt_${examId}`, data.attempt.id);
+      localStorage.setItem('student_info', JSON.stringify({ fullName, uniCode, phone }));
+      localStorage.removeItem(`bookmarks_${data.attempt.id}`);
+      setBookmarks({});
+      await loadQuestions(data.attempt.id);
+    } catch (err: any) {
+      setError(err.message || 'فشل بدء الامتحان');
     }
     setLoading(false);
   };
