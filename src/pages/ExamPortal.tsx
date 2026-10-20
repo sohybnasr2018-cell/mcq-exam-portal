@@ -208,6 +208,8 @@ export default function ExamPortal() {
         }
         if (data.status === 'in_progress') {
           await loadQuestions(attemptId);
+        } else {
+          await loadReviewData(attemptId);
         }
       } else {
         localStorage.removeItem(`attempt_${examId}`);
@@ -265,9 +267,14 @@ export default function ExamPortal() {
       setAttempt(data.attempt);
       localStorage.setItem(`attempt_${examId}`, data.attempt.id);
       localStorage.setItem('student_info', JSON.stringify({ fullName, uniCode, phone }));
-      localStorage.removeItem(`bookmarks_${data.attempt.id}`);
-      setBookmarks({});
-      await loadQuestions(data.attempt.id);
+      if (data.attempt.status === 'in_progress') {
+        localStorage.removeItem(`bookmarks_${data.attempt.id}`);
+        setBookmarks({});
+        await loadQuestions(data.attempt.id);
+      } else {
+        // If already submitted, preload review data so answers and score are immediately available
+        await loadReviewData(data.attempt.id);
+      }
     } catch (err: any) {
       setError(err.message || 'فشل بدء الامتحان');
     }
@@ -312,13 +319,14 @@ export default function ExamPortal() {
     }
   };
 
-  const loadReviewData = async () => {
-    if (!attempt?.id) return;
+  const loadReviewData = async (targetAttemptId?: string) => {
+    const aid = targetAttemptId || attempt?.id;
+    if (!aid) return;
     setLoadingReview(true);
     try {
       // 1. Try secure RPC function (checks show_answers on server)
       const { data, error } = await supabase.rpc('get_student_exam_review', {
-        p_attempt_id: attempt.id
+        p_attempt_id: aid
       });
       if (!error && data && data.success && Array.isArray(data.questions)) {
         setReviewQuestions(data.questions);
@@ -338,7 +346,7 @@ export default function ExamPortal() {
       const { data: aData } = await supabase
         .from('answers')
         .select('*')
-        .eq('attempt_id', attempt.id);
+        .eq('attempt_id', aid);
 
       const aMap: Record<string, string> = {};
       if (aData) {
@@ -541,7 +549,7 @@ export default function ExamPortal() {
             تم استلام وتسجيل جميع إجاباتك بنجاح في النظام.
           </p>
 
-          {exam?.show_results && hasScore ? (
+          {hasScore ? (
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700/60 dark:to-slate-800/80 border border-blue-100 dark:border-slate-600 rounded-xl p-6 mb-6 text-center">
               <p className="text-sm font-bold text-blue-700 dark:text-blue-300 mb-1">الدرجة النهائية / Score</p>
               <div className="text-4xl font-extrabold text-blue-900 dark:text-blue-100 my-2">
@@ -570,24 +578,22 @@ export default function ExamPortal() {
           )}
 
           {/* Student Exam Review Feature */}
-          {exam?.show_answers && (
-            <div className="mb-6 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  loadReviewData();
-                  setShowReviewModal(true);
-                }}
-                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm"
-              >
-                <BookOpen size={18} />
-                <span>مراجعة ورقة الامتحان وأخطائي (Review Exam)</span>
-              </button>
-              <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-2">
-                متاح الآن: يمكنك استعراض أسئلتك، إجاباتك، والإجابات النموذجية.
-              </p>
-            </div>
-          )}
+          <div className="mb-6 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                loadReviewData(attempt?.id);
+                setShowReviewModal(true);
+              }}
+              className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm cursor-pointer"
+            >
+              <BookOpen size={18} />
+              <span>مراجعة ورقة الامتحان وأخطائي (Review Exam)</span>
+            </button>
+            <p className="text-[11px] text-gray-400 dark:text-slate-400 mt-2">
+              متاح الآن: يمكنك استعراض أسئلتك، إجاباتك، والإجابات النموذجية.
+            </p>
+          </div>
 
           <div className="pt-4 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between text-xs text-gray-400 dark:text-slate-400">
             <span>الامتحان: {exam?.title}</span>

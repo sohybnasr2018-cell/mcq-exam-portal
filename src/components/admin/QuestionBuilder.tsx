@@ -167,7 +167,7 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8 text-gray-500 space-x-2">
+      <div className="flex items-center justify-center p-8 text-gray-500 dark:text-slate-400 space-x-2">
         <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent"></div>
         <span className="text-sm">جاري تحميل الأسئلة... (Loading questions...)</span>
       </div>
@@ -177,10 +177,10 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
   return (
     <div className="space-y-6">
       {questions.map((q, index) => (
-        <div key={q.id} className="border border-gray-200 p-4 rounded-md relative group">
+        <div key={q.id} className="border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/70 p-5 rounded-2xl relative group transition-colors">
           <div className="flex justify-between items-start mb-4">
-            <h4 className="font-semibold text-gray-700">Question {index + 1}</h4>
-            <button onClick={() => deleteQuestion(q.id)} className="text-red-500 opacity-0 group-hover:opacity-100 transition">
+            <h4 className="font-bold text-gray-700 dark:text-slate-200">Question {index + 1}</h4>
+            <button onClick={() => deleteQuestion(q.id)} className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer" title="Delete Question">
               <Trash2 size={18} />
             </button>
           </div>
@@ -189,16 +189,16 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
             value={q.text}
             onChange={(e) => updateQuestionText(q.id, e.target.value)}
             placeholder="Type your question here..."
-            className="w-full p-2.5 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800"
+            className="w-full p-3 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700/60 rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800 dark:text-slate-100 transition"
             rows={2}
           />
           
-          <div className="space-y-2 pl-4">
+          <div className="space-y-2.5 pl-2 sm:pl-4">
             {q.options.map((opt, optIndex) => (
               <div key={opt.id} className="flex items-center space-x-2">
                 <button
                   onClick={() => setCorrectOption(q.id, opt.id)}
-                  className={`p-1.5 rounded-full transition ${opt.is_correct ? 'text-green-600 bg-green-100 ring-2 ring-green-500' : 'text-gray-400 bg-gray-100 hover:bg-gray-200'}`}
+                  className={`p-1.5 rounded-full transition cursor-pointer shrink-0 ${opt.is_correct ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-950/60 ring-2 ring-green-500' : 'text-gray-400 dark:text-slate-400 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600'}`}
                   title={opt.is_correct ? "Correct answer" : "Click to mark as correct answer"}
                 >
                   <CheckCircle2 size={18} />
@@ -208,16 +208,16 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
                   value={opt.text}
                   onChange={(e) => updateOptionText(opt.id, e.target.value)}
                   placeholder={`Option ${optIndex + 1}...`}
-                  className="flex-1 p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800"
+                  className="flex-1 p-2.5 border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/60 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-800 dark:text-slate-100 transition"
                 />
-                <button onClick={() => deleteOption(q.id, opt.id)} className="text-red-400 hover:text-red-600 p-1" title="Delete option">
+                <button onClick={() => deleteOption(q.id, opt.id)} className="text-red-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 transition cursor-pointer shrink-0" title="Delete option">
                   <Trash2 size={16} />
                 </button>
               </div>
             ))}
             <button
               onClick={() => addOption(q.id)}
-              className="text-blue-600 text-sm flex items-center mt-2 hover:underline"
+              className="text-blue-600 dark:text-blue-400 text-sm font-semibold flex items-center mt-3 hover:underline cursor-pointer"
             >
               <Plus size={16} className="mr-1" /> Add Option
             </button>
@@ -227,7 +227,7 @@ export default function QuestionBuilder({ examId }: { examId: string }) {
       
       <button
         onClick={addQuestion}
-        className="w-full py-3 border-2 border-dashed border-gray-300 text-gray-600 rounded-md hover:bg-gray-50 flex items-center justify-center transition"
+        className="w-full py-3.5 border-2 border-dashed border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-800/80 flex items-center justify-center font-semibold transition cursor-pointer"
       >
         <Plus size={20} className="mr-2" /> Add New Question
       </button>
